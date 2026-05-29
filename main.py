@@ -1,14 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from database import engine, Base, SessaoLocal
 import models
 from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 
-# Inicia a API (UMA ÚNICA VEZ)
 app = FastAPI()
 
-# O "CARIMBO DE AUTORIZAÇÃO" DO CORS (Liberando as fronteiras)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -20,7 +18,51 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 
 # ==========================================
-# MÓDULO DE AGENDAMENTOS
+# MÓDULO MESTRE: O SEU PAINEL SAAS (ENGENHARIA DE BITS)
+# ==========================================
+class NovaBarbearia(BaseModel):
+    nome: str
+    slug: str
+
+@app.post("/api/saas/barbearias")
+def registrar_nova_barbearia(dados: NovaBarbearia):
+    db = SessaoLocal()
+    # Verifica se já existe uma barbearia com esse link
+    existe = db.query(models.Barbearia).filter(models.Barbearia.slug == dados.slug).first()
+    if existe:
+        db.close()
+        raise HTTPException(status_code=400, detail="Esse link já está em uso por outro cliente.")
+        
+    nova = models.Barbearia(nome=dados.nome, slug=dados.slug)
+    db.add(nova)
+    db.commit()
+    db.close()
+    return {"status": "Sucesso", "mensagem": f"Inquilino {dados.nome} ativado!"}
+
+@app.get("/api/saas/barbearias")
+def listar_clientes_do_software():
+    db = SessaoLocal()
+    clientes = db.query(models.Barbearia).all()
+    db.close()
+    return clientes
+
+
+@app.put("/api/saas/barbearias/{barbearia_id}/status")
+def alterar_status_assinatura(barbearia_id: int):
+    db = SessaoLocal()
+    cliente = db.query(models.Barbearia).filter(models.Barbearia.id == barbearia_id).first()
+    if cliente:
+        # A mágica do interruptor: se for True vira False, se for False vira True
+        cliente.plano_ativo = not cliente.plano_ativo 
+        db.commit()
+        status_atual = "Ativo" if cliente.plano_ativo else "Bloqueado"
+        db.close()
+        return {"mensagem": f"Plano do cliente alterado para: {status_atual}"}
+    db.close()
+    return {"mensagem": "Cliente não encontrado."}
+
+# ==========================================
+# MÓDULO DE AGENDAMENTOS (ISOLADO POR INQUILINO)
 # ==========================================
 class FichaAgendamento(BaseModel):
     cliente_nome: str
@@ -29,10 +71,11 @@ class FichaAgendamento(BaseModel):
     valor: float
     profissional: str 
 
-@app.post("/api/agendar")
-def criar_agendamento(dados_recebidos: FichaAgendamento):
+@app.post("/api/{tenant_slug}/agendar")
+def criar_agendamento(tenant_slug: str, dados_recebidos: FichaAgendamento):
     db = SessaoLocal()
     novo_agendamento = models.Agendamento(
+        barbearia_slug=tenant_slug, # <-- SALVANDO A ETIQUETA DA EMPRESA
         cliente_nome=dados_recebidos.cliente_nome,
         servico=dados_recebidos.servico,
         horario=dados_recebidos.horario,
@@ -44,44 +87,53 @@ def criar_agendamento(dados_recebidos: FichaAgendamento):
     db.close()
     return {"status": "Sucesso", "mensagem": f"Agendamento confirmado com {dados_recebidos.profissional}!"}
 
-@app.get("/api/agendamentos")
-def listar_todos_agendamentos():
+@app.get("/api/{tenant_slug}/agendamentos")
+def listar_agendamentos_da_empresa(tenant_slug: str):
     db = SessaoLocal()
-    todos_os_agendamentos = db.query(models.Agendamento).all()
+    # <-- FILTRANDO PARA MOSTRAR SÓ OS DADOS DESTA EMPRESA
+    agendamentos = db.query(models.Agendamento).filter(models.Agendamento.barbearia_slug == tenant_slug).all()
     db.close()
-    return todos_os_agendamentos
+    return agendamentos
 
-@app.delete("/api/agendamentos/{agendamento_id}")
-def cancelar_agendamento(agendamento_id: int):
+@app.delete("/api/{tenant_slug}/agendamentos/{agendamento_id}")
+def cancelar_agendamento(tenant_slug: str, agendamento_id: int):
     db = SessaoLocal()
-    agendamento_alvo = db.query(models.Agendamento).filter(models.Agendamento.id == agendamento_id).first()
-    if agendamento_alvo is not None:
-        db.delete(agendamento_alvo)
+    alvo = db.query(models.Agendamento).filter(
+        models.Agendamento.id == agendamento_id,
+        models.Agendamento.barbearia_slug == tenant_slug
+    ).first()
+    
+    if alvo is not None:
+        db.delete(alvo)
         db.commit() 
         db.close()
-        return {"status": "Sucesso", "mensagem": "Agendamento cancelado com sucesso!"}
+        return {"mensagem": "Agendamento cancelado!"}
     db.close()
-    return {"status": "Erro", "mensagem": "Agendamento não encontrado."}
+    return {"mensagem": "Erro: Agendamento não encontrado."}
 
-@app.get("/api/horarios/{duracao_minutos}/{profissional}")
-def obter_horarios_fatiados(duracao_minutos: int, profissional: str):
+@app.get("/api/{tenant_slug}/horarios/{duracao_minutos}/{profissional}")
+def obter_horarios_fatiados(tenant_slug: str, duracao_minutos: int, profissional: str):
     db = SessaoLocal()
     
-    config = db.query(models.ConfiguracaoAgenda).first()
+    config = db.query(models.ConfiguracaoAgenda).filter(models.ConfiguracaoAgenda.barbearia_slug == tenant_slug).first()
     abertura = 9  
     fechamento = 18
     if config is not None:
         abertura = config.hora_abertura
         fechamento = config.hora_fechamento
 
-    agendamentos_do_barbeiro = db.query(models.Agendamento).filter(models.Agendamento.profissional == profissional).all()
+    agendamentos_do_barbeiro = db.query(models.Agendamento).filter(
+        models.Agendamento.barbearia_slug == tenant_slug,
+        models.Agendamento.profissional == profissional
+    ).all()
     
     intervalos_ocupados = []
     for agendamento in agendamentos_do_barbeiro:
-        servico_cadastrado = db.query(models.ServicoBarbearia).filter(models.ServicoBarbearia.nome == agendamento.servico).first()
-        duracao_ocupada = 30 
-        if servico_cadastrado is not None:
-            duracao_ocupada = servico_cadastrado.duracao
+        servico = db.query(models.ServicoBarbearia).filter(
+            models.ServicoBarbearia.barbearia_slug == tenant_slug,
+            models.ServicoBarbearia.nome == agendamento.servico
+        ).first()
+        duracao_ocupada = servico.duracao if servico else 30 
             
         inicio_existente = datetime.strptime(agendamento.horario, "%H:%M")
         fim_existente = inicio_existente + timedelta(minutes=duracao_ocupada)
@@ -94,7 +146,6 @@ def obter_horarios_fatiados(duracao_minutos: int, profissional: str):
     passo_grade = timedelta(minutes=duracao_minutos)
 
     horarios_livres = []
-    
     while (hora_atual + timedelta(minutes=duracao_minutos)) <= hora_fim:
         inicio_proposto = hora_atual
         fim_proposto = hora_atual + timedelta(minutes=duracao_minutos)
@@ -107,23 +158,23 @@ def obter_horarios_fatiados(duracao_minutos: int, profissional: str):
         
         if not colisao:
             horarios_livres.append(hora_atual.strftime("%H:%M"))
-            
         hora_atual += passo_grade
 
     return {"horarios_disponiveis": horarios_livres}
 
 # ==========================================
-# MÓDULO DE SERVIÇOS (CARDÁPIO DA BARBEARIA)
+# MÓDULO DE SERVIÇOS
 # ==========================================
 class NovoServico(BaseModel):
     nome: str
     preco: float
     duracao: int 
 
-@app.post("/api/servicos")
-def cadastrar_servico(dados: NovoServico):
+@app.post("/api/{tenant_slug}/servicos")
+def cadastrar_servico(tenant_slug: str, dados: NovoServico):
     db = SessaoLocal()
     novo_servico = models.ServicoBarbearia(
+        barbearia_slug=tenant_slug,
         nome=dados.nome, 
         preco=dados.preco,
         duracao=dados.duracao 
@@ -131,47 +182,49 @@ def cadastrar_servico(dados: NovoServico):
     db.add(novo_servico)
     db.commit()
     db.close()
-    return {"status": "Sucesso", "mensagem": "Serviço cadastrado com sucesso!"}
+    return {"mensagem": "Serviço cadastrado!"}
 
-@app.get("/api/servicos")
-def listar_servicos():
+@app.get("/api/{tenant_slug}/servicos")
+def listar_servicos(tenant_slug: str):
     db = SessaoLocal()
-    todos_servicos = db.query(models.ServicoBarbearia).all()
+    servicos = db.query(models.ServicoBarbearia).filter(models.ServicoBarbearia.barbearia_slug == tenant_slug).all()
     db.close()
-    return todos_servicos
+    return servicos
 
-@app.delete("/api/servicos/{servico_id}")
-def remover_servico(servico_id: int):
+@app.delete("/api/{tenant_slug}/servicos/{servico_id}")
+def remover_servico(tenant_slug: str, servico_id: int):
     db = SessaoLocal()
-    alvo = db.query(models.ServicoBarbearia).filter(models.ServicoBarbearia.id == servico_id).first()
+    alvo = db.query(models.ServicoBarbearia).filter(
+        models.ServicoBarbearia.id == servico_id,
+        models.ServicoBarbearia.barbearia_slug == tenant_slug
+    ).first()
     if alvo is not None:
         db.delete(alvo)
         db.commit()
-        db.close()
-        return {"status": "Sucesso", "mensagem": "Serviço removido do sistema!"}
     db.close()
-    return {"status": "Erro", "mensagem": "Serviço não encontrado."}
+    return {"mensagem": "Serviço removido!"}
 
 # ==========================================
-# MÓDULO DE CONFIGURAÇÃO (HORÁRIOS E TEMA)
+# MÓDULO DE CONFIGURAÇÃO 
 # ==========================================
 class NovaConfiguracao(BaseModel):
     abertura: int
     fechamento: int
     cor_tema: str 
 
-@app.post("/api/configuracoes")
-def salvar_configuracoes(dados: NovaConfiguracao):
+@app.post("/api/{tenant_slug}/configuracoes")
+def salvar_configuracoes(tenant_slug: str, dados: NovaConfiguracao):
     db = SessaoLocal()
-    config_atual = db.query(models.ConfiguracaoAgenda).first()
+    config_atual = db.query(models.ConfiguracaoAgenda).filter(models.ConfiguracaoAgenda.barbearia_slug == tenant_slug).first()
     
     if config_atual is None:
-        nova_config = models.ConfiguracaoAgenda(
+        nova = models.ConfiguracaoAgenda(
+            barbearia_slug=tenant_slug,
             hora_abertura=dados.abertura, 
             hora_fechamento=dados.fechamento,
             cor_tema=dados.cor_tema 
         )
-        db.add(nova_config)
+        db.add(nova)
     else:
         config_atual.hora_abertura = dados.abertura
         config_atual.hora_fechamento = dados.fechamento
@@ -179,16 +232,15 @@ def salvar_configuracoes(dados: NovaConfiguracao):
         
     db.commit()
     db.close()
-    return {"status": "Sucesso", "mensagem": "Configurações do sistema atualizadas!"}
+    return {"mensagem": "Configurações atualizadas!"}
 
-@app.get("/api/configuracoes")
-def ler_configuracoes():
+@app.get("/api/{tenant_slug}/configuracoes")
+def ler_configuracoes(tenant_slug: str):
     db = SessaoLocal()
-    config_atual = db.query(models.ConfiguracaoAgenda).first()
+    config_atual = db.query(models.ConfiguracaoAgenda).filter(models.ConfiguracaoAgenda.barbearia_slug == tenant_slug).first()
     db.close()
     if config_atual is None:
         return {"abertura": 9, "fechamento": 18, "cor_tema": "#f59e0b"}
-        
     return {
         "abertura": config_atual.hora_abertura, 
         "fechamento": config_atual.hora_fechamento, 
@@ -201,28 +253,50 @@ def ler_configuracoes():
 class NovoProfissional(BaseModel):
     nome: str
 
-@app.post("/api/profissionais")
-def cadastrar_profissional(dados: NovoProfissional):
+@app.post("/api/{tenant_slug}/profissionais")
+def cadastrar_profissional(tenant_slug: str, dados: NovoProfissional):
     db = SessaoLocal()
-    novo_prof = models.Profissional(nome=dados.nome)
+    novo_prof = models.Profissional(barbearia_slug=tenant_slug, nome=dados.nome)
     db.add(novo_prof)
     db.commit()
     db.close()
-    return {"status": "Sucesso", "mensagem": "Profissional adicionado à equipe!"}
+    return {"mensagem": "Profissional adicionado!"}
 
-@app.get("/api/profissionais")
-def listar_profissionais():
+@app.get("/api/{tenant_slug}/profissionais")
+def listar_profissionais(tenant_slug: str):
     db = SessaoLocal()
-    equipe = db.query(models.Profissional).all()
+    equipe = db.query(models.Profissional).filter(models.Profissional.barbearia_slug == tenant_slug).all()
     db.close()
     return equipe
 
-@app.delete("/api/profissionais/{prof_id}")
-def remover_profissional(prof_id: int):
+@app.delete("/api/{tenant_slug}/profissionais/{prof_id}")
+def remover_profissional(tenant_slug: str, prof_id: int):
     db = SessaoLocal()
-    alvo = db.query(models.Profissional).filter(models.Profissional.id == prof_id).first()
+    alvo = db.query(models.Profissional).filter(
+        models.Profissional.id == prof_id,
+        models.Profissional.barbearia_slug == tenant_slug
+    ).first()
     if alvo is not None:
         db.delete(alvo)
         db.commit()
     db.close()
     return {"mensagem": "Profissional removido."}
+
+# ==========================================
+# MÓDULO DE SEGURANÇA (VERIFICAÇÃO DE ASSINATURA)
+# ==========================================
+@app.get("/api/{tenant_slug}/verificar-acesso")
+def verificar_status_inquilino(tenant_slug: str):
+    db = SessaoLocal()
+    cliente = db.query(models.Barbearia).filter(models.Barbearia.slug == tenant_slug).first()
+    db.close()
+    
+    # Se o cliente não existe
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+        
+    # Se o cliente está com a fatura atrasada (Bloqueado no seu painel SaaS)
+    if not cliente.plano_ativo:
+        raise HTTPException(status_code=403, detail="Assinatura suspensa")
+        
+    return {"status": "Liberado"}
