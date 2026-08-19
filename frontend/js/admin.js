@@ -1,4 +1,5 @@
 let tenantSlugLogado = "";
+let contextoUsuarioAdmin = null;
 let configuracaoAtual = {};
 let listenersDePreviewRegistrados = false;
 let listenersCRMRegistrados = false;
@@ -1467,6 +1468,76 @@ function alternarMenuAdmin() {
 
 
 
+
+
+async function carregarContextoUsuarioAdmin() {
+  const token = obterToken();
+
+  if (!token) {
+    contextoUsuarioAdmin = null;
+    console.warn("Token ausente. Contexto do usuario admin nao foi carregado.");
+    return null;
+  }
+
+  try {
+    const resposta = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!resposta.ok) {
+      throw new Error(`Falha ao carregar contexto do usuario: ${resposta.status}`);
+    }
+
+    const contexto = await resposta.json();
+
+    contextoUsuarioAdmin = contexto;
+
+    const papel = obterPapelUsuarioAdmin();
+    const permissoes = obterPermissoesUsuarioAdmin();
+
+    console.info("Contexto do usuario admin carregado.", {
+      papel,
+      permissoes,
+      tenant: contexto?.tenant?.slug || tenantSlugLogado
+    });
+
+    return contexto;
+  } catch (erro) {
+    contextoUsuarioAdmin = null;
+    console.warn("Nao foi possivel carregar contexto do usuario admin.", erro);
+    return null;
+  }
+}
+
+function obterPapelUsuarioAdmin() {
+  return (
+    contextoUsuarioAdmin?.usuario?.papel
+    || "gestor"
+  );
+}
+
+function obterPermissoesUsuarioAdmin() {
+  const permissoes = contextoUsuarioAdmin?.usuario?.permissoes;
+
+  if (Array.isArray(permissoes)) {
+    return permissoes;
+  }
+
+  return [];
+}
+
+function usuarioAdminTemPermissao(permissao) {
+  const permissoes = obterPermissoesUsuarioAdmin();
+
+  return (
+    permissoes.includes("*")
+    || permissoes.includes(permissao)
+  );
+}
+
 function atualizarInsightDashboardAdmin(totalHoje, receitaHoje, concluidosHoje, proximoHorario) {
     const titulo = document.getElementById("dashboard-insight-titulo");
     const texto = document.getElementById("dashboard-insight-texto");
@@ -2825,7 +2896,7 @@ async function carregarOnboardingAdmin() {
 window.carregarOnboardingAdmin = carregarOnboardingAdmin;
 
 
-function iniciarPainel() {
+async function iniciarPainel() {
   if (!existeSessaoLocal()) {
     document.getElementById("tela-login").style.display = "flex";
 
@@ -2866,6 +2937,8 @@ function iniciarPainel() {
   document.getElementById("painel-principal").style.display = "block";
 
   document.getElementById("tag-tenant").innerText = `@${tenantSlugLogado}`;
+
+  await carregarContextoUsuarioAdmin();
 
   atualizarLinkPublico();
   registrarListenersDePreview();
