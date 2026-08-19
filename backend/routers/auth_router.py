@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database import SessaoLocal
 import models
-from security import verificar_senha, criar_token_acesso
+from security import verificar_senha, criar_token_acesso, obter_contexto_usuario_logado
 
 router = APIRouter()
 
@@ -56,3 +56,23 @@ def fazer_login(
         "token_type": "bearer",
         "tenant_slug": usuario.slug,
     }
+
+@router.get("/api/auth/me")
+def obter_meu_contexto(
+    contexto: dict = Depends(obter_contexto_usuario_logado),
+):
+    return {
+        "autenticado": True,
+        "usuario": {
+            "sub": contexto.get("sub"),
+            "email": contexto.get("email"),
+            "role": contexto.get("role"),
+            "papel": contexto.get("papel"),
+            "permissoes": contexto.get("permissoes", []),
+        },
+        "tenant": {
+            "slug": contexto.get("tenant_slug"),
+            "id": contexto.get("tenant_id"),
+        },
+    }
+
