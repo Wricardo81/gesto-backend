@@ -1504,6 +1504,8 @@ async function carregarContextoUsuarioAdmin() {
       tenant: contexto?.tenant?.slug || tenantSlugLogado
     });
 
+    atualizarIndicadorPerfilAdmin();
+
     return contexto;
   } catch (erro) {
     contextoUsuarioAdmin = null;
@@ -1536,6 +1538,47 @@ function usuarioAdminTemPermissao(permissao) {
     permissoes.includes("*")
     || permissoes.includes(permissao)
   );
+}
+
+
+
+function traduzirPapelUsuarioAdmin(papel) {
+  const papelNormalizado = String(papel || "gestor").trim().toLowerCase();
+
+  const nomes = {
+    gestor: "Gestor",
+    recepcao: "Recep\u00e7\u00e3o",
+    prestador: "Prestador"
+  };
+
+  return nomes[papelNormalizado] || "Gestor";
+}
+
+function obterResumoPermissoesUsuarioAdmin() {
+  const permissoes = obterPermissoesUsuarioAdmin();
+
+  if (permissoes.includes("*")) {
+    return "Acesso total";
+  }
+
+  if (!permissoes.length) {
+    return "Permiss\u00f5es padr\u00e3o";
+  }
+
+  return `${permissoes.length} permiss\u00f5es`;
+}
+
+function atualizarIndicadorPerfilAdmin() {
+  const indicador = document.getElementById("admin-perfil-operacional");
+
+  if (!indicador) {
+    return;
+  }
+
+  const papel = traduzirPapelUsuarioAdmin(obterPapelUsuarioAdmin());
+  const resumo = obterResumoPermissoesUsuarioAdmin();
+
+  indicador.textContent = `Perfil: ${papel} \u00b7 ${resumo}`;
 }
 
 function atualizarInsightDashboardAdmin(totalHoje, receitaHoje, concluidosHoje, proximoHorario) {
