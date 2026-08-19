@@ -43,6 +43,11 @@ def fazer_login(
     {
         "sub": usuario.slug,
         "role": "tenant_admin",
+
+        "papel": "gestor",
+        "perfil_operacional": "gestor",
+        "papel_operacional": "gestor",
+        "permissoes": ["*"],
     }
 )
 

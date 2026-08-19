@@ -65,6 +65,116 @@ def criar_token_acesso(dados: dict) -> str:
 esquema_seguranca = HTTPBearer()
 
 
+ROLE_TENANT_ADMIN = "tenant_admin"
+ROLE_SAAS_ADMIN = "saas_admin"
+
+PAPEL_GESTOR = "gestor"
+PAPEL_RECEPCAO = "recepcao"
+PAPEL_PRESTADOR = "prestador"
+
+PAPEIS_OPERACIONAIS_VALIDOS = {
+    PAPEL_GESTOR,
+    PAPEL_RECEPCAO,
+    PAPEL_PRESTADOR,
+}
+
+
+def normalizar_papel_operacional(payload: dict) -> str:
+    papel = (
+        payload.get("papel")
+        or payload.get("perfil_operacional")
+        or payload.get("papel_operacional")
+        or payload.get("perfil_usuario")
+        or payload.get("perfil")
+        or payload.get("tipo_usuario")
+        or payload.get("tipo")
+        or payload.get("role")
+    )
+
+    if not papel:
+        return PAPEL_GESTOR
+
+    papel_normalizado = str(papel).strip().lower()
+
+    if papel_normalizado in {
+        "tenant_admin",
+        "admin",
+        "administrador",
+        "dono",
+        "owner",
+        "gestor",
+    }:
+        return PAPEL_GESTOR
+
+    if papel_normalizado in {"recepcao", "recep??o", "atendimento"}:
+        return PAPEL_RECEPCAO
+
+    if papel_normalizado in {"prestador", "profissional", "colaborador"}:
+        return PAPEL_PRESTADOR
+
+    return PAPEL_GESTOR
+
+
+def obter_permissoes_operacionais(payload: dict) -> list[str]:
+    permissoes = payload.get("permissoes")
+
+    if isinstance(permissoes, list):
+        return [
+            str(permissao).strip()
+            for permissao in permissoes
+            if str(permissao).strip()
+        ]
+
+    return []
+
+
+def montar_contexto_usuario(payload: dict) -> dict:
+    tenant_slug = (
+        payload.get("tenant_slug")
+        or payload.get("tenant")
+        or payload.get("barbearia_slug")
+        or payload.get("slug")
+        or payload.get("sub")
+    )
+
+    return {
+        "sub": payload.get("sub"),
+        "tenant_slug": tenant_slug,
+        "tenant_id": payload.get("tenant_id")
+        or payload.get("barbearia_id")
+        or payload.get("empresa_id"),
+        "email": payload.get("email"),
+        "role": payload.get("role", ROLE_TENANT_ADMIN),
+        "papel": normalizar_papel_operacional(payload),
+        "permissoes": obter_permissoes_operacionais(payload),
+    }
+
+
+def obter_contexto_usuario_logado(
+    credenciais: HTTPAuthorizationCredentials = Depends(
+        esquema_seguranca
+    ),
+) -> dict:
+    payload = decodificar_token(
+        credenciais.credentials
+    )
+
+    contexto = montar_contexto_usuario(payload)
+
+    if (
+        not contexto["tenant_slug"]
+        or contexto["role"] != ROLE_TENANT_ADMIN
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Voce nao possui permissao para acessar este recurso.",
+        )
+
+    return contexto
+
+
+
+
 def decodificar_token(token: str) -> dict:
     try:
         return jwt.decode(
@@ -91,29 +201,8 @@ def obter_usuario_logado(
         esquema_seguranca
     ),
 ) -> str:
-    payload = decodificar_token(
-        credenciais.credentials
-    )
-
-    tenant_slug = payload.get("sub")
-
-    # Tokens antigos podem não possuir role.
-    # Eles continuam válidos temporariamente como tenant_admin.
-    role = payload.get(
-        "role",
-        "tenant_admin",
-    )
-
-    if (
-        not tenant_slug
-        or role != "tenant_admin"
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Você não possui permissão para acessar este recurso.",
-        )
-
-    return tenant_slug
+    contexto = obter_contexto_usuario_logado(credenciais)
+    return contexto["tenant_slug"]
 
 
 def obter_saas_admin_logado(

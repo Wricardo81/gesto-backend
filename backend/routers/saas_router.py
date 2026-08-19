@@ -555,6 +555,11 @@ def cadastrar_empresa_publica(
             "tipo": "tenant_admin",
             "tipo_usuario": "tenant_admin",
             "perfil": "tenant_admin",
+
+            "papel": "gestor",
+            "perfil_operacional": "gestor",
+            "papel_operacional": "gestor",
+            "permissoes": ["*"],
         }
     )
 
