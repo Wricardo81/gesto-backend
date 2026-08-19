@@ -76,3 +76,51 @@ def obter_meu_contexto(
         },
     }
 
+@router.get("/api/auth/perfis-operacionais")
+def listar_perfis_operacionais(
+    _contexto: dict = Depends(obter_contexto_usuario_logado),
+):
+    return {
+        "perfis": [
+            {
+                "codigo": "gestor",
+                "nome": "Gestor",
+                "descricao": "Acesso total ao painel, financeiro, equipe, servicos, agenda e configuracoes.",
+                "permissoes_padrao": ["*"],
+            },
+            {
+                "codigo": "recepcao",
+                "nome": "Recep\u00e7\u00e3o",
+                "descricao": "Atendimento operacional com foco em agenda, clientes, remarcacoes e fila de espera.",
+                "permissoes_padrao": [
+                    "ver_dashboard",
+                    "ver_agenda_geral",
+                    "criar_agendamento",
+                    "editar_agendamento",
+                    "cancelar_agendamento",
+                    "marcar_falta",
+                    "ver_clientes",
+                    "criar_cliente",
+                    "editar_cliente",
+                    "ver_servicos",
+                    "ver_profissionais",
+                    "ver_fila_espera",
+                    "gerenciar_fila_espera",
+                ],
+            },
+            {
+                "codigo": "prestador",
+                "nome": "Prestador",
+                "descricao": "Profissional que acompanha a propria agenda, atendimentos e resumo financeiro individual.",
+                "permissoes_padrao": [
+                    "ver_agenda_propria",
+                    "concluir_agendamento",
+                    "marcar_falta",
+                    "ver_clientes_dos_proprios_atendimentos",
+                    "ver_financeiro_proprio",
+                    "ver_comissao_propria",
+                ],
+            },
+        ]
+    }
+
