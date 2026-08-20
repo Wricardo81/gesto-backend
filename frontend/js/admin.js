@@ -1,5 +1,6 @@
 let tenantSlugLogado = "";
 let contextoUsuarioAdmin = null;
+let catalogoPerfisOperacionaisAdmin = [];
 let configuracaoAtual = {};
 let listenersDePreviewRegistrados = false;
 let listenersCRMRegistrados = false;
@@ -1542,6 +1543,61 @@ function usuarioAdminTemPermissao(permissao) {
 
 
 
+
+
+async function carregarCatalogoPerfisOperacionaisAdmin() {
+  const token = obterToken();
+
+  if (!token) {
+    catalogoPerfisOperacionaisAdmin = [];
+    console.warn("Token ausente. Catalogo de perfis operacionais nao foi carregado.");
+    return [];
+  }
+
+  try {
+    const resposta = await fetch(`${API_BASE_URL}/api/auth/perfis-operacionais`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!resposta.ok) {
+      throw new Error(`Falha ao carregar catalogo de perfis operacionais: ${resposta.status}`);
+    }
+
+    const dados = await resposta.json();
+    const perfis = Array.isArray(dados?.perfis) ? dados.perfis : [];
+
+    catalogoPerfisOperacionaisAdmin = perfis;
+
+    console.info("Catalogo de perfis operacionais carregado.", {
+      total: perfis.length,
+      perfis: perfis.map((perfil) => perfil.codigo)
+    });
+
+    return perfis;
+  } catch (erro) {
+    catalogoPerfisOperacionaisAdmin = [];
+    console.warn("Nao foi possivel carregar catalogo de perfis operacionais.", erro);
+    return [];
+  }
+}
+
+function obterCatalogoPerfisOperacionaisAdmin() {
+  return Array.isArray(catalogoPerfisOperacionaisAdmin)
+    ? catalogoPerfisOperacionaisAdmin
+    : [];
+}
+
+function obterPerfilOperacionalPorCodigoAdmin(codigo) {
+  const codigoNormalizado = String(codigo || "").trim().toLowerCase();
+
+  return obterCatalogoPerfisOperacionaisAdmin().find(
+    (perfil) => perfil.codigo === codigoNormalizado
+  ) || null;
+}
+
 function traduzirPapelUsuarioAdmin(papel) {
   const papelNormalizado = String(papel || "gestor").trim().toLowerCase();
 
@@ -2982,6 +3038,7 @@ async function iniciarPainel() {
   document.getElementById("tag-tenant").innerText = `@${tenantSlugLogado}`;
 
   await carregarContextoUsuarioAdmin();
+  await carregarCatalogoPerfisOperacionaisAdmin();
 
   atualizarLinkPublico();
   registrarListenersDePreview();
