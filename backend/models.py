@@ -180,6 +180,22 @@ class Profissional(Base):
     barbearia_slug = Column(String, index=True)
     nome = Column(String)
 
+
+class UsuarioOperacional(Base):
+    __tablename__ = "usuarios_operacionais"
+
+    id = Column(Integer, primary_key=True, index=True)
+    barbearia_slug = Column(String, index=True, nullable=False)
+    nome = Column(String, nullable=False)
+    email = Column(String, index=True, nullable=False)
+    senha_hash = Column(String, nullable=False)
+    papel = Column(String, default="prestador", nullable=False)
+    permissoes_json = Column(String, default="[]", nullable=False)
+    profissional_nome = Column(String, nullable=True)
+    ativo = Column(Boolean, default=True, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class BloqueioAgenda(Base):
     __tablename__ = "bloqueios_agenda"
 
