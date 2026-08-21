@@ -23,38 +23,86 @@ def fazer_login(
     credenciais: RequisicaoLogin,
     db: Session = Depends(get_db),
 ):
+    email_normalizado = credenciais.email.strip().lower()
+
     usuario = (
         db.query(models.Barbearia)
-        .filter(models.Barbearia.email == credenciais.email)
+        .filter(models.Barbearia.email == email_normalizado)
         .first()
     )
 
     if (
-        not usuario
-        or not usuario.senha_hash
-        or not verificar_senha(credenciais.senha, usuario.senha_hash)
+        usuario
+        and usuario.senha_hash
+        and verificar_senha(credenciais.senha, usuario.senha_hash)
+    ):
+        token = criar_token_acesso(
+            {
+                "sub": usuario.slug,
+                "tenant_slug": usuario.slug,
+                "email": usuario.email,
+                "role": "tenant_admin",
+                "papel": "gestor",
+                "perfil_operacional": "gestor",
+                "papel_operacional": "gestor",
+                "permissoes": ["*"],
+                "nome": usuario.nome,
+            }
+        )
+
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "tenant_slug": usuario.slug,
+        }
+
+    usuario_operacional = (
+        db.query(models.UsuarioOperacional)
+        .filter(models.UsuarioOperacional.email == email_normalizado)
+        .first()
+    )
+
+    if (
+        not usuario_operacional
+        or not usuario_operacional.ativo
+        or not usuario_operacional.senha_hash
+        or not verificar_senha(
+            credenciais.senha,
+            usuario_operacional.senha_hash,
+        )
     ):
         raise HTTPException(
             status_code=401,
             detail="E-mail ou senha incorretos.",
         )
 
-    token = criar_token_acesso(
-    {
-        "sub": usuario.slug,
-        "role": "tenant_admin",
+    import json
 
-        "papel": "gestor",
-        "perfil_operacional": "gestor",
-        "papel_operacional": "gestor",
-        "permissoes": ["*"],
-    }
-)
+    try:
+        permissoes = json.loads(usuario_operacional.permissoes_json or "[]")
+    except json.JSONDecodeError:
+        permissoes = []
+
+    token = criar_token_acesso(
+        {
+            "sub": usuario_operacional.barbearia_slug,
+            "tenant_slug": usuario_operacional.barbearia_slug,
+            "email": usuario_operacional.email,
+            "role": "tenant_admin",
+            "papel": usuario_operacional.papel,
+            "perfil_operacional": usuario_operacional.papel,
+            "papel_operacional": usuario_operacional.papel,
+            "permissoes": permissoes,
+            "profissional_nome": usuario_operacional.profissional_nome,
+            "usuario_operacional_id": usuario_operacional.id,
+            "nome": usuario_operacional.nome,
+        }
+    )
 
     return {
         "access_token": token,
         "token_type": "bearer",
-        "tenant_slug": usuario.slug,
+        "tenant_slug": usuario_operacional.barbearia_slug,
     }
 
 @router.get("/api/auth/me")
@@ -69,6 +117,9 @@ def obter_meu_contexto(
             "role": contexto.get("role"),
             "papel": contexto.get("papel"),
             "permissoes": contexto.get("permissoes", []),
+            "profissional_nome": contexto.get("profissional_nome"),
+            "usuario_operacional_id": contexto.get("usuario_operacional_id"),
+            "nome": contexto.get("nome"),
         },
         "tenant": {
             "slug": contexto.get("tenant_slug"),

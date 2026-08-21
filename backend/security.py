@@ -147,6 +147,9 @@ def montar_contexto_usuario(payload: dict) -> dict:
         "role": payload.get("role", ROLE_TENANT_ADMIN),
         "papel": normalizar_papel_operacional(payload),
         "permissoes": obter_permissoes_operacionais(payload),
+        "profissional_nome": payload.get("profissional_nome"),
+        "usuario_operacional_id": payload.get("usuario_operacional_id"),
+        "nome": payload.get("nome"),
     }
 
 
