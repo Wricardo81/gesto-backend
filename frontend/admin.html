@@ -715,6 +715,89 @@
                     </div>
 
                     <div id="lista-equipe"></div>
+
+
+                    <section class="bloco-config acessos-equipe-admin">
+                        <div class="admin-section-header">
+                            <div>
+                                <span class="section-kicker">Acessos</span>
+                                <h3>Acessos da equipe</h3>
+                                <p>
+                                    Cadastre quem pode entrar no painel como recep??o ou prestador.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="campo">
+                                <label>Nome do usu?rio</label>
+                                <input
+                                    type="text"
+                                    id="acesso-equipe-nome"
+                                    class="input-admin"
+                                    placeholder="Ex: Ricardo Prestador"
+                                >
+                            </div>
+
+                            <div class="campo">
+                                <label>E-mail de acesso</label>
+                                <input
+                                    type="email"
+                                    id="acesso-equipe-email"
+                                    class="input-admin"
+                                    placeholder="usuario@empresa.com.br"
+                                >
+                            </div>
+
+                            <div class="campo">
+                                <label>Senha tempor?ria</label>
+                                <input
+                                    type="password"
+                                    id="acesso-equipe-senha"
+                                    class="input-admin"
+                                    placeholder="M?nimo 6 caracteres"
+                                >
+                            </div>
+
+                            <div class="campo">
+                                <label>Papel operacional</label>
+                                <select id="acesso-equipe-papel" class="input-admin">
+                                    <option value="prestador">Prestador</option>
+                                    <option value="recepcao">Recep??o</option>
+                                </select>
+                            </div>
+
+                            <div class="campo">
+                                <label>Profissional vinculado</label>
+                                <select id="acesso-equipe-profissional" class="input-admin">
+                                    <option value="">Selecione um profissional</option>
+                                </select>
+                                <small>
+                                    Obrigat?rio para prestador. Recep??o pode ficar sem v?nculo.
+                                </small>
+                            </div>
+
+                            <div class="campo">
+                                <label>Status</label>
+                                <select id="acesso-equipe-ativo" class="input-admin">
+                                    <option value="true">Ativo</option>
+                                    <option value="false">Inativo</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="acoes-form">
+                            <button
+                                type="button"
+                                class="btn-add"
+                                onclick="salvarUsuarioOperacionalAdmin()"
+                            >
+                                Criar acesso
+                            </button>
+                        </div>
+
+                        <div id="lista-usuarios-operacionais" class="lista-admin"></div>
+                    </section>
                 </section>
 
                 <section class="bloco-config">
@@ -1423,7 +1506,7 @@
         <script src="./js/config.js?v=94"></script>
         <script src="./js/api.js?v=95"></script>
         <script src="./js/auth.js?v=95"></script>
-        <script src="./js/admin.js?v=112"></script>
+        <script src="./js/admin.js?v=113"></script>
         <script src="./js/pwa.js?v=1"></script>
         <script src="./js/diagnostico.js?v=1"></script>
 </body>

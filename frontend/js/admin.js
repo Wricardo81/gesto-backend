@@ -3733,6 +3733,187 @@ async function carregarEquipe() {
 }
 
 
+
+function obterLabelPapelOperacionalAdmin(papel) {
+  const mapa = {
+    gestor: "Gestor",
+    recepcao: "Recep??o",
+    prestador: "Prestador",
+  };
+
+  return mapa[String(papel || "").trim().toLowerCase()] || "Operacional";
+}
+
+async function preencherProfissionaisUsuarioOperacionalAdmin() {
+  const select = document.getElementById("acesso-equipe-profissional");
+
+  if (!select || !adminProntoParaRequisicao()) {
+    return;
+  }
+
+  const valorAtual = select.value;
+
+  select.innerHTML = '<option value="">Selecione um profissional</option>';
+
+  try {
+    const profissionais = await apiRequest(
+      `/api/${tenantSlugLogado}/profissionais`,
+      {
+        auth: true,
+      }
+    );
+
+    for (const profissional of profissionais || []) {
+      const option = document.createElement("option");
+      option.value = profissional.nome;
+      option.textContent = profissional.nome;
+      select.appendChild(option);
+    }
+
+    if (valorAtual) {
+      select.value = valorAtual;
+    }
+  } catch (erro) {
+    console.error("Erro ao carregar profissionais para acessos:", erro);
+  }
+}
+
+function renderizarUsuariosOperacionaisAdmin(usuarios) {
+  const area = document.getElementById("lista-usuarios-operacionais");
+
+  if (!area) {
+    return;
+  }
+
+  const lista = Array.isArray(usuarios) ? usuarios : [];
+
+  if (!lista.length) {
+    area.innerHTML = criarEstadoVazioAdmin({
+      icone: "?",
+      titulo: "Nenhum acesso cadastrado ainda",
+      descricao:
+        "Crie acessos para recep??o ou prestadores entrarem com login pr?prio.",
+      textoBotao: "Criar primeiro acesso",
+      secaoDestino: "secao-profissionais",
+    });
+
+    return;
+  }
+
+  area.innerHTML = "";
+
+  for (const usuario of lista) {
+    const item = document.createElement("div");
+    item.className = "item-lista";
+
+    const papel = obterLabelPapelOperacionalAdmin(usuario.papel);
+    const status = usuario.ativo ? "Ativo" : "Inativo";
+    const profissional = usuario.profissional_nome || "Sem v?nculo";
+
+    item.innerHTML = `
+      <div>
+        <strong>${usuario.nome || "-"}</strong>
+        <small>
+          ${usuario.email || "-"} - ${papel} - ${profissional} - ${status}
+        </small>
+      </div>
+    `;
+
+    area.appendChild(item);
+  }
+}
+
+async function carregarUsuariosOperacionaisAdmin() {
+  if (!adminProntoParaRequisicao()) {
+    return;
+  }
+
+  const area = document.getElementById("lista-usuarios-operacionais");
+
+  if (!area) {
+    return;
+  }
+
+  area.innerHTML = criarEstadoVazioAdmin({
+    icone: "?",
+    titulo: "Carregando acessos",
+    descricao: "Buscando usu?rios operacionais da equipe.",
+  });
+
+  try {
+    await preencherProfissionaisUsuarioOperacionalAdmin();
+
+    const resposta = await apiRequest(
+      `/api/${tenantSlugLogado}/admin/usuarios-operacionais`,
+      {
+        auth: true,
+      }
+    );
+
+    renderizarUsuariosOperacionaisAdmin(resposta.usuarios || []);
+  } catch (erro) {
+    tratarErro(erro);
+  }
+}
+
+async function salvarUsuarioOperacionalAdmin() {
+  if (!adminProntoParaRequisicao()) {
+    return;
+  }
+
+  const nome = obterValorCampo("acesso-equipe-nome", "");
+  const email = obterValorCampo("acesso-equipe-email", "");
+  const senha = obterValorCampo("acesso-equipe-senha", "");
+  const papel = obterValorCampo("acesso-equipe-papel", "prestador");
+  const profissionalNome = obterValorCampo("acesso-equipe-profissional", "");
+  const ativo = obterValorCampo("acesso-equipe-ativo", "true") === "true";
+
+  if (!nome || !email || !senha) {
+    exibirMensagemAdmin("Informe nome, e-mail e senha do acesso.");
+    return;
+  }
+
+  if (papel === "prestador" && !profissionalNome) {
+    exibirMensagemAdmin("Prestador precisa estar vinculado a um profissional.");
+    return;
+  }
+
+  try {
+    await apiRequest(
+      `/api/${tenantSlugLogado}/admin/usuarios-operacionais`,
+      {
+        method: "POST",
+        auth: true,
+        body: {
+          nome,
+          email,
+          senha,
+          papel,
+          profissional_nome: profissionalNome || null,
+          ativo,
+        },
+      }
+    );
+
+    document.getElementById("acesso-equipe-nome").value = "";
+    document.getElementById("acesso-equipe-email").value = "";
+    document.getElementById("acesso-equipe-senha").value = "";
+    document.getElementById("acesso-equipe-papel").value = "prestador";
+    document.getElementById("acesso-equipe-profissional").value = "";
+    document.getElementById("acesso-equipe-ativo").value = "true";
+
+    await carregarUsuariosOperacionaisAdmin();
+
+    exibirMensagemPainel("Acesso operacional criado com sucesso.");
+  } catch (erro) {
+    tratarErro(erro);
+  }
+}
+
+window.carregarUsuariosOperacionaisAdmin = carregarUsuariosOperacionaisAdmin;
+window.salvarUsuarioOperacionalAdmin = salvarUsuarioOperacionalAdmin;
+
+
 async function salvarProfissional() {
   const input = document.getElementById("novo-prof-nome");
   const nome = input.value.trim();
