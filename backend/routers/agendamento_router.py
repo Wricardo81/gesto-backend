@@ -7,7 +7,7 @@ from services.acesso_empresa_service import validar_empresa_pode_operar
 from sqlalchemy.orm import Session
 import models
 from database import SessaoLocal
-from security import validar_tenant_logado
+from security import validar_tenant_logado, obter_contexto_usuario_logado
 from services import agendamento_service
 from pydantic import BaseModel
 
@@ -281,6 +281,7 @@ def listar_agendamentos_admin(
     data_fim: Optional[date] = Query(default=None),
     db: Session = Depends(get_db),
     _tenant_autorizado: str = Depends(validar_tenant_logado),
+    contexto_usuario: dict = Depends(obter_contexto_usuario_logado),
 ):
     consulta = db.query(models.Agendamento).filter(
         models.Agendamento.barbearia_slug == tenant_slug
@@ -294,6 +295,26 @@ def listar_agendamentos_admin(
     if data_fim:
         consulta = consulta.filter(
             models.Agendamento.data <= data_fim
+        )
+
+    papel_operacional = str(
+        contexto_usuario.get("papel") or ""
+    ).strip().lower()
+
+    profissional_vinculado = str(
+        contexto_usuario.get("profissional_nome") or ""
+    ).strip()
+
+    if papel_operacional == "prestador":
+        if not profissional_vinculado:
+            return {
+                "total_agendamentos": 0,
+                "faturamento_previsto": 0,
+                "agendamentos": [],
+            }
+
+        consulta = consulta.filter(
+            models.Agendamento.profissional == profissional_vinculado
         )
 
     agendamentos = (
