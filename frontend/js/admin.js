@@ -1506,6 +1506,7 @@ async function carregarContextoUsuarioAdmin() {
     });
 
     atualizarIndicadorPerfilAdmin();
+    aplicarPermissoesInterfaceAdmin();
 
     return contexto;
   } catch (erro) {
@@ -1540,6 +1541,126 @@ function usuarioAdminTemPermissao(permissao) {
     || permissoes.includes(permissao)
   );
 }
+
+
+const PERMISSOES_SECAO_ADMIN = {
+  "secao-dashboard": [
+    "ver_dashboard",
+    "ver_dashboard_operacional",
+    "ver_resumo"
+  ],
+  "secao-agenda": [
+    "gerenciar_agenda",
+    "ver_agenda",
+    "ver_agenda_propria"
+  ],
+  "secao-bloqueios-agenda": [
+    "gerenciar_bloqueios",
+    "gerenciar_agenda"
+  ],
+  "secao-clientes-crm": [
+    "gerenciar_clientes",
+    "ver_clientes"
+  ],
+  "secao-configuracoes": [
+    "gerenciar_configuracoes",
+    "editar_configuracoes"
+  ],
+  "secao-admin-assinatura": [
+    "gerenciar_assinatura",
+    "ver_assinatura",
+    "gerenciar_plano"
+  ],
+  "secao-servicos": [
+    "gerenciar_servicos"
+  ],
+  "secao-profissionais": [
+    "gerenciar_equipe",
+    "gerenciar_profissionais"
+  ],
+  "secao-equipe": [
+    "gerenciar_equipe",
+    "gerenciar_profissionais"
+  ]
+};
+
+function usuarioPodeAcessarSecaoAdmin(secaoId) {
+  if (!secaoId) {
+    return true;
+  }
+
+  if (!contextoUsuarioAdmin) {
+    return true;
+  }
+
+  const permissoes = obterPermissoesUsuarioAdmin();
+
+  if (permissoes.includes("*")) {
+    return true;
+  }
+
+  const permissoesDaSecao = PERMISSOES_SECAO_ADMIN[secaoId];
+
+  if (!Array.isArray(permissoesDaSecao) || !permissoesDaSecao.length) {
+    return true;
+  }
+
+  return permissoesDaSecao.some((permissao) =>
+    usuarioAdminTemPermissao(permissao)
+  );
+}
+
+function obterPrimeiraSecaoPermitidaAdmin() {
+  const botoes = Array.from(document.querySelectorAll(".admin-tab"));
+
+  const botaoPermitido = botoes.find((botao) =>
+    usuarioPodeAcessarSecaoAdmin(botao.dataset.secao)
+  );
+
+  return botaoPermitido?.dataset?.secao || "secao-dashboard";
+}
+
+function aplicarPermissoesInterfaceAdmin() {
+  const botoes = document.querySelectorAll(".admin-tab");
+
+  botoes.forEach((botao) => {
+    const secaoId = botao.dataset.secao;
+    const permitido = usuarioPodeAcessarSecaoAdmin(secaoId);
+
+    botao.hidden = !permitido;
+    botao.setAttribute("aria-hidden", String(!permitido));
+    botao.disabled = !permitido;
+  });
+
+  const secaoAtual = document.querySelector(".secao-admin.ativa")?.id;
+
+  if (secaoAtual && !usuarioPodeAcessarSecaoAdmin(secaoAtual)) {
+    mostrarSecaoAdmin(obterPrimeiraSecaoPermitidaAdmin());
+  }
+}
+
+function avisarPermissaoNegadaAdmin(secaoId) {
+  const mensagem = "Seu perfil operacional nao tem permissao para acessar esta area.";
+
+  console.warn("Acesso negado por permissao operacional.", {
+    secao: secaoId,
+    papel: obterPapelUsuarioAdmin(),
+    permissoes: obterPermissoesUsuarioAdmin()
+  });
+
+  if (typeof mostrarToast === "function") {
+    mostrarToast(mensagem, "erro");
+    return;
+  }
+
+  if (typeof exibirToast === "function") {
+    exibirToast(mensagem, "erro");
+    return;
+  }
+
+  alert(mensagem);
+}
+
 
 
 

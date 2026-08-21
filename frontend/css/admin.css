@@ -1302,6 +1302,11 @@
             border-color: var(--destaque);
         }
 
+
+        .admin-tab[hidden] {
+            display: none !important;
+        }
+
         .admin-tab.ativa {
             background: var(--destaque);
             color: #0f172a;
