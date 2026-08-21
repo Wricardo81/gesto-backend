@@ -1507,6 +1507,7 @@ async function carregarContextoUsuarioAdmin() {
 
     atualizarIndicadorPerfilAdmin();
     aplicarPermissoesInterfaceAdmin();
+    atualizarRotuloAgendaPorPerfilAdmin();
 
     return contexto;
   } catch (erro) {
@@ -1664,6 +1665,74 @@ function avisarPermissaoNegadaAdmin(secaoId) {
 
 
 
+
+
+
+function usuarioAdminEhPrestador() {
+  return obterPapelUsuarioAdmin() === "prestador";
+}
+
+function normalizarNomeProfissionalAdmin(valor) {
+  return String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function obterProfissionalVinculadoUsuarioAdmin() {
+  return (
+    contextoUsuarioAdmin?.usuario?.profissional_nome
+    || contextoUsuarioAdmin?.usuario?.nome_profissional
+    || contextoUsuarioAdmin?.usuario?.profissional
+    || contextoUsuarioAdmin?.usuario?.profissionalNome
+    || window.__profissionalOperacionalTeste
+    || ""
+  );
+}
+
+function filtrarAgendamentosPorPerfilOperacionalAdmin(agendamentos) {
+  const lista = Array.isArray(agendamentos) ? agendamentos : [];
+
+  if (!usuarioAdminEhPrestador()) {
+    return lista;
+  }
+
+  const profissionalVinculado = normalizarNomeProfissionalAdmin(
+    obterProfissionalVinculadoUsuarioAdmin()
+  );
+
+  if (!profissionalVinculado) {
+    console.warn(
+      "Prestador sem profissional vinculado. Agenda propria retornara vazia.",
+      {
+        contexto: contextoUsuarioAdmin
+      }
+    );
+
+    return [];
+  }
+
+  return lista.filter((agendamento) =>
+    normalizarNomeProfissionalAdmin(agendamento?.profissional)
+      === profissionalVinculado
+  );
+}
+
+function atualizarRotuloAgendaPorPerfilAdmin() {
+  const tituloAgenda = document.querySelector("#secao-agenda h3");
+
+  if (!tituloAgenda) {
+    return;
+  }
+
+  if (usuarioAdminEhPrestador()) {
+    tituloAgenda.textContent = "Minha agenda";
+    return;
+  }
+
+  tituloAgenda.textContent = "Agenda e faturamento";
+}
 
 
 async function carregarCatalogoPerfisOperacionaisAdmin() {
@@ -3950,11 +4019,15 @@ async function carregarAgendamentos() {
             }
         );
 
-        const agendamentos = Array.isArray(dados.agendamentos)
+        const agendamentosOriginais = Array.isArray(dados.agendamentos)
             ? dados.agendamentos
             : [];
 
-        const total = Number(dados.total_agendamentos || agendamentos.length || 0);
+        const agendamentos = filtrarAgendamentosPorPerfilOperacionalAdmin(
+            agendamentosOriginais
+        );
+
+        const total = agendamentos.length;
 
         const normalizarStatusFinanceiro = (valor) =>
             String(valor || "confirmado").trim().toLowerCase();
@@ -4180,7 +4253,7 @@ async function carregarAgendamentos() {
 
         tbody.innerHTML = "";
 
-        if (!dados.agendamentos || !dados.agendamentos.length) {
+        if (!agendamentos.length) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="8">
@@ -4207,7 +4280,7 @@ async function carregarAgendamentos() {
             return;
         }
 
-        for (const agendamento of dados.agendamentos) {
+        for (const agendamento of agendamentos) {
             const tr = document.createElement("tr");
 
             const ultimoVisto = obterUltimoAgendamentoVisto();
@@ -4332,7 +4405,7 @@ async function carregarAgendamentos() {
             ? faturamento / total
             : 0;
 
-            agendamentosAdminCache = dados.agendamentos || [];
+            agendamentosAdminCache = agendamentos;
 
 
             atualizarIndicadorNovosAgendamentos(agendamentosAdminCache);
