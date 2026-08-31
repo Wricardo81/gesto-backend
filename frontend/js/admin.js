@@ -4654,9 +4654,45 @@ function formatarTipoComissaoPrestadorAdmin(tipo, valor) {
     return "Sem comissao configurada";
 }
 
+
+async function obterAgendamentosParaResumoPrestadorAdmin(agendamentos) {
+    if (Array.isArray(agendamentos) && agendamentos.length > 0) {
+        return agendamentos;
+    }
+
+    if (Array.isArray(agendamentosAdminCache) && agendamentosAdminCache.length > 0) {
+        return agendamentosAdminCache;
+    }
+
+    try {
+        const resposta = await apiRequest(
+            `/api/${tenantSlugLogado}/admin/agendamentos`,
+            {
+                auth: true,
+            }
+        );
+
+        const lista = resposta?.agendamentos || [];
+
+        if (Array.isArray(lista)) {
+            agendamentosAdminCache = lista;
+            return lista;
+        }
+    } catch (erro) {
+        console.warn("Nao foi possivel buscar agendamentos para resumo do prestador.", erro);
+    }
+
+    return [];
+}
+
+
 async function renderizarResumoProducaoPrestadorAdmin(agendamentos) {
     const cardId = "resumo-producao-prestador-admin";
     const cardExistente = document.getElementById(cardId);
+
+    const agendamentosBase = await obterAgendamentosParaResumoPrestadorAdmin(
+        agendamentos
+    );
 
     if (!usuarioAdminEhPrestador()) {
         if (cardExistente) {
@@ -4674,7 +4710,7 @@ async function renderizarResumoProducaoPrestadorAdmin(agendamentos) {
 
     const comissao = await obterComissaoProfissionalLogadoAdmin();
     const resumo = calcularResumoProducaoPrestadorAdmin(
-        agendamentos,
+        agendamentosBase,
         comissao
     );
 
