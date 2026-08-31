@@ -4530,6 +4530,236 @@ function aplicarVisibilidadeFinanceiraOperacionalAdmin() {
 }
 
 
+
+function obterAgendamentosConcluidosPrestadorAdmin(agendamentos) {
+    const profissionalVinculado = obterProfissionalVinculadoUsuarioAdmin();
+    const profissionalNormalizado = normalizarNomeProfissionalAdmin(
+        profissionalVinculado
+    );
+
+    return (agendamentos || []).filter((agendamento) => {
+        const status = String(agendamento?.status || "")
+            .trim()
+            .toLowerCase();
+
+        const profissionalAgendamento = normalizarNomeProfissionalAdmin(
+            agendamento?.profissional
+        );
+
+        return (
+            status === "concluido"
+            && profissionalAgendamento === profissionalNormalizado
+        );
+    });
+}
+
+async function obterComissaoProfissionalLogadoAdmin() {
+    const profissionalVinculado = obterProfissionalVinculadoUsuarioAdmin();
+    const profissionalNormalizado = normalizarNomeProfissionalAdmin(
+        profissionalVinculado
+    );
+
+    if (!profissionalNormalizado) {
+        return {
+            comissao_tipo: "nenhuma",
+            comissao_valor: 0,
+            profissional_nome: "",
+        };
+    }
+
+    const profissionais = await apiRequest(
+        `/api/${tenantSlugLogado}/profissionais`,
+        {
+            auth: true,
+        }
+    );
+
+    const profissional = (profissionais || []).find((item) =>
+        normalizarNomeProfissionalAdmin(item?.nome) === profissionalNormalizado
+    );
+
+    return {
+        comissao_tipo: profissional?.comissao_tipo || "nenhuma",
+        comissao_valor: Number(profissional?.comissao_valor || 0),
+        profissional_nome: profissional?.nome || profissionalVinculado,
+    };
+}
+
+function calcularResumoProducaoPrestadorAdmin(agendamentos, comissao) {
+    const concluidos = obterAgendamentosConcluidosPrestadorAdmin(agendamentos);
+
+    const valorProduzido = concluidos.reduce(
+        (total, agendamento) => total + Number(agendamento?.valor || 0),
+        0
+    );
+
+    const tipo = String(comissao?.comissao_tipo || "nenhuma")
+        .trim()
+        .toLowerCase();
+
+    const valorComissao = Number(comissao?.comissao_valor || 0);
+
+    let valorReceber = 0;
+
+    if (tipo === "percentual") {
+        valorReceber = valorProduzido * valorComissao / 100;
+    }
+
+    if (tipo === "valor_fixo") {
+        valorReceber = concluidos.length * valorComissao;
+    }
+
+    const servicos = {};
+
+    for (const agendamento of concluidos) {
+        const nomeServico = agendamento?.servico || "Servico nao informado";
+
+        if (!servicos[nomeServico]) {
+            servicos[nomeServico] = {
+                quantidade: 0,
+                valor: 0,
+            };
+        }
+
+        servicos[nomeServico].quantidade += 1;
+        servicos[nomeServico].valor += Number(agendamento?.valor || 0);
+    }
+
+    return {
+        atendimentos: concluidos.length,
+        valorProduzido,
+        valorReceber,
+        tipo,
+        valorComissao,
+        servicos,
+        ultimosAtendimentos: concluidos.slice(0, 5),
+    };
+}
+
+function formatarTipoComissaoPrestadorAdmin(tipo, valor) {
+    if (tipo === "percentual") {
+        return `${Number(valor || 0)}% sobre atendimentos concluidos`;
+    }
+
+    if (tipo === "valor_fixo") {
+        return `${formatarMoeda(valor)} por atendimento concluido`;
+    }
+
+    return "Sem comissao configurada";
+}
+
+async function renderizarResumoProducaoPrestadorAdmin(agendamentos) {
+    const cardId = "resumo-producao-prestador-admin";
+    const cardExistente = document.getElementById(cardId);
+
+    if (!usuarioAdminEhPrestador()) {
+        if (cardExistente) {
+            cardExistente.remove();
+        }
+
+        return;
+    }
+
+    const secaoDashboard = document.getElementById("secao-dashboard");
+
+    if (!secaoDashboard) {
+        return;
+    }
+
+    const comissao = await obterComissaoProfissionalLogadoAdmin();
+    const resumo = calcularResumoProducaoPrestadorAdmin(
+        agendamentos,
+        comissao
+    );
+
+    let card = cardExistente;
+
+    if (!card) {
+        card = document.createElement("section");
+        card.id = cardId;
+        card.className = "financeiro-resumo-card";
+        secaoDashboard.appendChild(card);
+    }
+
+    const servicosHtml = Object.entries(resumo.servicos)
+        .map(([nome, dados]) => `
+            <li>
+                <strong>${nome}</strong>
+                <span>
+                    ${dados.quantidade} atendimento(s) -
+                    ${formatarMoeda(dados.valor)}
+                </span>
+            </li>
+        `)
+        .join("");
+
+    const ultimosHtml = resumo.ultimosAtendimentos
+        .map((agendamento) => `
+            <li>
+                <strong>${agendamento.data || "-"} ${agendamento.horario || ""}</strong>
+                <span>
+                    ${agendamento.cliente_nome || "-"} -
+                    ${agendamento.servico || "-"} -
+                    ${formatarMoeda(agendamento.valor || 0)}
+                </span>
+            </li>
+        `)
+        .join("");
+
+    card.innerHTML = `
+        <div class="financeiro-resumo-topo">
+            <div>
+                <span>Minha producao</span>
+                <h3>Resumo do prestador</h3>
+                <p>
+                    Acompanhe seus atendimentos concluidos, valor produzido
+                    e comissao estimada.
+                </p>
+            </div>
+        </div>
+
+        <div class="financeiro-resumo-grid">
+            <div>
+                <span>Atendimentos concluidos</span>
+                <strong>${resumo.atendimentos}</strong>
+            </div>
+
+            <div>
+                <span>Valor produzido</span>
+                <strong>${formatarMoeda(resumo.valorProduzido)}</strong>
+            </div>
+
+            <div>
+                <span>A receber estimado</span>
+                <strong>${formatarMoeda(resumo.valorReceber)}</strong>
+            </div>
+
+            <div>
+                <span>Regra de comissao</span>
+                <strong>
+                    ${formatarTipoComissaoPrestadorAdmin(
+                        resumo.tipo,
+                        resumo.valorComissao
+                    )}
+                </strong>
+            </div>
+        </div>
+
+        <div class="financeiro-resumo-detalhes">
+            <h4>Servicos realizados</h4>
+            <ul>
+                ${servicosHtml || "<li>Nenhum atendimento concluido ainda.</li>"}
+            </ul>
+
+            <h4>Ultimos atendimentos concluidos</h4>
+            <ul>
+                ${ultimosHtml || "<li>Nenhum atendimento concluido ainda.</li>"}
+            </ul>
+        </div>
+    `;
+}
+
+
 async function carregarAgendamentos() {
     if (!adminProntoParaRequisicao()) {
         return;
