@@ -1508,6 +1508,7 @@ async function carregarContextoUsuarioAdmin() {
     atualizarIndicadorPerfilAdmin();
     aplicarPermissoesInterfaceAdmin();
     atualizarRotuloAgendaPorPerfilAdmin();
+    aplicarVisibilidadeFinanceiraOperacionalAdmin();
 
     return contexto;
   } catch (erro) {
@@ -4237,6 +4238,198 @@ async function deletarServico(id) {
 /* =========================================================
    AGENDA E FATURAMENTO
 ========================================================= */
+
+
+function usuarioAdminEhGestor() {
+  return obterPapelUsuarioAdmin() === "gestor"
+    || obterPermissoesUsuarioAdmin().includes("*");
+}
+
+function usuarioAdminEhRecepcao() {
+  return obterPapelUsuarioAdmin() === "recepcao";
+}
+
+function usuarioAdminPodeVerFinanceiroGeral() {
+  return usuarioAdminEhGestor();
+}
+
+function usuarioAdminPodeVerFinanceiroProprio() {
+  return (
+    usuarioAdminEhPrestador()
+    && (
+      usuarioAdminTemPermissao("ver_financeiro_proprio")
+      || usuarioAdminTemPermissao("ver_comissao_propria")
+    )
+  );
+}
+
+function usuarioAdminPodeVerAlgumFinanceiro() {
+  return (
+    usuarioAdminPodeVerFinanceiroGeral()
+    || usuarioAdminPodeVerFinanceiroProprio()
+  );
+}
+
+function obterContainerFinanceiroAdmin(elemento) {
+  if (!elemento) {
+    return null;
+  }
+
+  return (
+    elemento.closest(".metric-card")
+    || elemento.closest(".financeiro-resumo-card")
+    || elemento.closest(".agenda-resumo-card")
+    || elemento.closest("section")
+    || elemento.parentElement
+  );
+}
+
+function alternarElementoFinanceiroAdmin(id, visivel) {
+  const elemento = document.getElementById(id);
+
+  if (!elemento) {
+    return;
+  }
+
+  const container = obterContainerFinanceiroAdmin(elemento);
+
+  if (container) {
+    container.hidden = !visivel;
+    container.setAttribute("aria-hidden", String(!visivel));
+  }
+}
+
+function ajustarColunasFinanceirasTabelaAdmin(containerSelector, termos, visivel) {
+  const container = document.querySelector(containerSelector);
+
+  if (!container) {
+    return;
+  }
+
+  const termosNormalizados = (termos || []).map((termo) =>
+    String(termo || "").trim().toLowerCase()
+  );
+
+  const tabelas = container.querySelectorAll("table");
+
+  tabelas.forEach((tabela) => {
+    const cabecalhos = Array.from(tabela.querySelectorAll("thead th"));
+
+    cabecalhos.forEach((th, indice) => {
+      const texto = String(th.textContent || "").trim().toLowerCase();
+      const ehFinanceiro = termosNormalizados.some((termo) =>
+        texto.includes(termo)
+      );
+
+      if (!ehFinanceiro) {
+        return;
+      }
+
+      th.hidden = !visivel;
+      th.setAttribute("aria-hidden", String(!visivel));
+
+      tabela.querySelectorAll("tbody tr").forEach((linha) => {
+        const celula = linha.children[indice];
+
+        if (celula) {
+          celula.hidden = !visivel;
+          celula.setAttribute("aria-hidden", String(!visivel));
+        }
+      });
+    });
+  });
+}
+
+function aplicarVisibilidadeFinanceiraOperacionalAdmin() {
+  const podeVerAlgumFinanceiro = usuarioAdminPodeVerAlgumFinanceiro();
+  const podeVerFinanceiroGeral = usuarioAdminPodeVerFinanceiroGeral();
+
+  const idsFinanceiroDashboard = [
+    "visor-hoje-receita",
+    "visor-faturamento",
+    "visor-faturamento-concluido",
+    "visor-agendamentos-faturaveis",
+    "visor-ticket-medio",
+    "visor-cancelamentos-financeiro",
+    "visor-financeiro-receita-prevista",
+    "visor-financeiro-receita-realizada",
+  ];
+
+  idsFinanceiroDashboard.forEach((id) =>
+    alternarElementoFinanceiroAdmin(id, podeVerAlgumFinanceiro)
+  );
+
+  const resumoFinanceiro = document.getElementById("resumo-financeiro-dashboard");
+
+  if (resumoFinanceiro) {
+    resumoFinanceiro.hidden = !podeVerAlgumFinanceiro;
+    resumoFinanceiro.setAttribute(
+      "aria-hidden",
+      String(!podeVerAlgumFinanceiro)
+    );
+  }
+
+  alternarElementoFinanceiroAdmin(
+    "visor-faturamento-crm",
+    podeVerFinanceiroGeral
+  );
+
+  alternarElementoFinanceiroAdmin(
+    "visor-ticket-medio-crm",
+    podeVerFinanceiroGeral
+  );
+
+  ajustarColunasFinanceirasTabelaAdmin(
+    "#secao-agenda",
+    ["valor"],
+    podeVerAlgumFinanceiro
+  );
+
+  ajustarColunasFinanceirasTabelaAdmin(
+    "#secao-clientes-crm",
+    ["faturamento", "ticket"],
+    podeVerFinanceiroGeral
+  );
+
+  const subtituloDashboard = document.getElementById("dashboard-pro-subtitulo");
+
+  if (subtituloDashboard) {
+    if (usuarioAdminEhRecepcao()) {
+      subtituloDashboard.textContent =
+        "Acompanhe agenda, clientes e operacao do atendimento.";
+    } else if (usuarioAdminEhPrestador()) {
+      subtituloDashboard.textContent =
+        "Acompanhe sua agenda, seus atendimentos e sua producao.";
+    }
+  }
+
+  const tituloAgenda = document.querySelector("#secao-agenda h3");
+  const descricaoAgenda = document.querySelector("#secao-agenda .descricao-bloco");
+
+  if (tituloAgenda) {
+    if (usuarioAdminEhRecepcao()) {
+      tituloAgenda.textContent = "Agenda";
+    } else if (usuarioAdminEhPrestador()) {
+      tituloAgenda.textContent = "Minha agenda e producao";
+    } else {
+      tituloAgenda.textContent = "Agenda e faturamento";
+    }
+  }
+
+  if (descricaoAgenda) {
+    if (usuarioAdminEhRecepcao()) {
+      descricaoAgenda.textContent =
+        "Consulte e acompanhe os agendamentos recebidos.";
+    } else if (usuarioAdminEhPrestador()) {
+      descricaoAgenda.textContent =
+        "Consulte seus atendimentos e sua producao individual.";
+    } else {
+      descricaoAgenda.textContent =
+        "Consulte os agendamentos recebidos e o faturamento previsto.";
+    }
+  }
+}
+
 
 async function carregarAgendamentos() {
     if (!adminProntoParaRequisicao()) {
