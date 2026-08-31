@@ -36,6 +36,40 @@ def listar_profissionais(tenant_slug: str, db: Session = Depends(get_db)):
     # precisa ver a lista de barbeiros para conseguir agendar!
     return profissional_service.listar_profissionais(db, tenant_slug)
 
+
+
+@router.put("/api/{tenant_slug}/profissionais/{prof_id}/comissao")
+def atualizar_comissao_profissional(
+    tenant_slug: str,
+    prof_id: int,
+    dados: profissional_service.AtualizarComissaoProfissional,
+    db: Session = Depends(get_db),
+    usuario_logado: str = Depends(obter_usuario_logado),
+    _tenant_autorizado: str = Depends(
+        validar_tenant_logado
+    ),
+):
+    if usuario_logado != tenant_slug:
+        raise HTTPException(
+            status_code=403,
+            detail="Voce nao tem permissao para alterar esta empresa.",
+        )
+
+    profissional = profissional_service.atualizar_comissao_profissional(
+        db,
+        tenant_slug,
+        prof_id,
+        dados,
+    )
+
+    if not profissional:
+        raise HTTPException(
+            status_code=404,
+            detail="Profissional nao encontrado.",
+        )
+
+    return profissional
+
 @router.delete("/api/{tenant_slug}/profissionais/{prof_id}")
 def remover_profissional(
     tenant_slug: str, 
