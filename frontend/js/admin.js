@@ -3714,15 +3714,58 @@ async function carregarEquipe() {
 
             div.className = "item-lista";
 
-            div.innerHTML = `
-                <span>${profissional.nome}</span>
+            const comissaoTipo = profissional.comissao_tipo || "nenhuma";
+            const comissaoValor = Number(profissional.comissao_valor || 0);
 
-                <button
-                    class="btn-del-mini"
-                    onclick="deletarProfissional(${profissional.id})"
-                >
-                    Remover
-                </button>
+            div.innerHTML = `
+                <div class="profissional-info-admin">
+                    <strong>${profissional.nome}</strong>
+                    <small>
+                        Comissao atual: ${formatarResumoComissaoProfissionalAdmin(
+                          comissaoTipo,
+                          comissaoValor
+                        )}
+                    </small>
+                </div>
+
+                <div class="profissional-comissao-admin">
+                    <select id="comissao-tipo-${profissional.id}">
+                        <option value="nenhuma" ${comissaoTipo === "nenhuma" ? "selected" : ""}>
+                            Sem comissao
+                        </option>
+                        <option value="percentual" ${comissaoTipo === "percentual" ? "selected" : ""}>
+                            Percentual
+                        </option>
+                        <option value="valor_fixo" ${comissaoTipo === "valor_fixo" ? "selected" : ""}>
+                            Valor fixo
+                        </option>
+                    </select>
+
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        id="comissao-valor-${profissional.id}"
+                        value="${comissaoValor}"
+                        placeholder="Valor"
+                    >
+
+                    <button
+                        type="button"
+                        class="btn-secundario-mini"
+                        onclick="salvarComissaoProfissionalAdmin(${profissional.id})"
+                    >
+                        Salvar comissao
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn-del-mini"
+                        onclick="deletarProfissional(${profissional.id})"
+                    >
+                        Remover
+                    </button>
+                </div>
             `;
 
             area.appendChild(div);
@@ -4005,6 +4048,62 @@ window.alternarStatusUsuarioOperacionalAdmin =
 
 window.carregarUsuariosOperacionaisAdmin = carregarUsuariosOperacionaisAdmin;
 window.salvarUsuarioOperacionalAdmin = salvarUsuarioOperacionalAdmin;
+
+
+
+function formatarResumoComissaoProfissionalAdmin(tipo, valor) {
+    const tipoNormalizado = String(tipo || "nenhuma").trim().toLowerCase();
+    const valorNumerico = Number(valor || 0);
+
+    if (tipoNormalizado === "percentual") {
+        return `${valorNumerico}% sobre atendimentos concluidos`;
+    }
+
+    if (tipoNormalizado === "valor_fixo") {
+        return `${formatarMoeda(valorNumerico)} por atendimento concluido`;
+    }
+
+    return "sem comissao configurada";
+}
+
+async function salvarComissaoProfissionalAdmin(profissionalId) {
+    if (!adminProntoParaRequisicao()) {
+        return;
+    }
+
+    const campoTipo = document.getElementById(`comissao-tipo-${profissionalId}`);
+    const campoValor = document.getElementById(`comissao-valor-${profissionalId}`);
+
+    if (!campoTipo || !campoValor) {
+        exibirMensagemAdmin("Campos de comissao nao encontrados.");
+        return;
+    }
+
+    const comissaoTipo = campoTipo.value || "nenhuma";
+    const comissaoValor = Number(campoValor.value || 0);
+
+    try {
+        await apiRequest(
+            `/api/${tenantSlugLogado}/profissionais/${profissionalId}/comissao`,
+            {
+                method: "PUT",
+                auth: true,
+                body: {
+                    comissao_tipo: comissaoTipo,
+                    comissao_valor: comissaoValor,
+                },
+            }
+        );
+
+        await carregarEquipe();
+
+        exibirMensagemPainel("Comissao do profissional atualizada com sucesso.");
+    } catch (erro) {
+        tratarErro(erro);
+    }
+}
+
+window.salvarComissaoProfissionalAdmin = salvarComissaoProfissionalAdmin;
 
 
 async function salvarProfissional() {
