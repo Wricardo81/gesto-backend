@@ -1,30 +1,72 @@
-from sqlalchemy.orm import Session
-from repositories import profissional_repository
-from fastapi import HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 import models
+from repositories import profissional_repository
 
 
 class NovoProfissional(BaseModel):
     nome: str
 
+
+def serializar_profissional(profissional: models.Profissional) -> dict:
+    return {
+        "id": profissional.id,
+        "nome": profissional.nome,
+        "comissao_tipo": profissional.comissao_tipo or "nenhuma",
+        "comissao_valor": float(profissional.comissao_valor or 0),
+    }
+
+
+def cadastrar_novo_profissional(
+    db: Session,
+    tenant_slug: str,
+    dados: NovoProfissional,
+):
+    profissional = models.Profissional(
+        barbearia_slug=tenant_slug,
+        nome=dados.nome,
+        comissao_tipo="nenhuma",
+        comissao_valor=0,
+    )
+
+    db.add(profissional)
+    db.commit()
+    db.refresh(profissional)
+
+    return serializar_profissional(profissional)
+
+
 def listar_profissionais(db: Session, tenant_slug: str):
-    """
-    Aqui entram as regras de negócio. 
-    Se precisássemos verificar se a barbearia está com a assinatura ativa 
-    antes de listar a equipe, a lógica ficaria aqui.
-    """
-    return profissional_repository.buscar_profissionais_por_tenant(db, tenant_slug)
+    profissionais = profissional_repository.buscar_profissionais_por_tenant(
+        db,
+        tenant_slug,
+    )
+
+    return [
+        serializar_profissional(profissional)
+        for profissional in profissionais
+    ]
 
 
+def deletar_profissional(
+    db: Session,
+    prof_id: int,
+    tenant_slug: str,
+):
+    profissional = (
+        db.query(models.Profissional)
+        .filter(
+            models.Profissional.id == prof_id,
+            models.Profissional.barbearia_slug == tenant_slug,
+        )
+        .first()
+    )
 
-# Adicione no final do arquivo existente:
-def cadastrar_novo_profissional(db: Session, tenant_slug: str, dados: NovoProfissional):
-    novo_prof = models.Profissional(barbearia_slug=tenant_slug, nome=dados.nome)
-    return profissional_repository.criar_profissional(db, novo_prof)
+    if not profissional:
+        return False
 
-def deletar_profissional(db: Session, prof_id: int, tenant_slug: str):
-    sucesso = profissional_repository.remover_profissional(db, prof_id, tenant_slug)
-    if not sucesso:
-        raise HTTPException(status_code=404, detail="Profissional não encontrado.")
-    return {"mensagem": "Profissional removido."}
+    db.delete(profissional)
+    db.commit()
+
+    return True
