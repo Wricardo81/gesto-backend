@@ -3734,6 +3734,47 @@ async function carregarEquipe() {
 
 
 
+
+function resumirPermissoesUsuarioOperacionalAdmin(permissoes) {
+  const lista = Array.isArray(permissoes) ? permissoes : [];
+
+  if (!lista.length) {
+    return "Sem permissoes informadas";
+  }
+
+  if (lista.includes("*")) {
+    return "Acesso total";
+  }
+
+  const mapa = {
+    ver_dashboard: "Ver painel",
+    ver_dashboard_operacional: "Painel operacional",
+    ver_agenda_geral: "Agenda geral",
+    ver_agenda_propria: "Agenda propria",
+    gerenciar_agenda: "Gerenciar agenda",
+    criar_agendamento: "Criar agendamento",
+    editar_agendamento: "Editar agendamento",
+    cancelar_agendamento: "Cancelar agendamento",
+    marcar_falta: "Marcar falta",
+    ver_clientes: "Ver clientes",
+    gerenciar_clientes: "Gerenciar clientes",
+    criar_cliente: "Criar cliente",
+    editar_cliente: "Editar cliente",
+    ver_servicos: "Ver servicos",
+    ver_profissionais: "Ver profissionais",
+    gerenciar_bloqueios: "Gerenciar bloqueios",
+    concluir_agendamento: "Concluir agendamento",
+    ver_financeiro_proprio: "Financeiro proprio",
+    ver_comissao_propria: "Comissao propria",
+  };
+
+  return lista
+    .slice(0, 8)
+    .map((permissao) => mapa[permissao] || permissao)
+    .join(", ");
+}
+
+
 function obterLabelPapelOperacionalAdmin(papel) {
   const mapa = {
     gestor: "Gestor",
@@ -3810,6 +3851,9 @@ function renderizarUsuariosOperacionaisAdmin(usuarios) {
     const status = usuario.ativo ? "Ativo" : "Inativo";
     const profissional = usuario.profissional_nome || "Sem vinculo";
 
+    const textoBotaoStatus = usuario.ativo ? "Desativar" : "Reativar";
+    const proximoStatus = usuario.ativo ? "false" : "true";
+
     item.innerHTML = `
       <div>
         <strong>${usuario.nome || "-"}</strong>
@@ -3817,6 +3861,14 @@ function renderizarUsuariosOperacionaisAdmin(usuarios) {
           ${usuario.email || "-"} - ${papel} - ${profissional} - ${status}
         </small>
       </div>
+
+      <button
+        type="button"
+        class="btn-del-mini"
+        onclick="alternarStatusUsuarioOperacionalAdmin(${usuario.id}, ${proximoStatus})"
+      >
+        ${textoBotaoStatus}
+      </button>
     `;
 
     area.appendChild(item);
@@ -3909,6 +3961,46 @@ async function salvarUsuarioOperacionalAdmin() {
     tratarErro(erro);
   }
 }
+
+
+async function alternarStatusUsuarioOperacionalAdmin(usuarioId, ativo) {
+  if (!adminProntoParaRequisicao()) {
+    return;
+  }
+
+  const acao = ativo ? "reativar" : "desativar";
+
+  if (!confirm(`Deseja ${acao} este acesso da equipe?`)) {
+    return;
+  }
+
+  try {
+    await apiRequest(
+      `/api/${tenantSlugLogado}/admin/usuarios-operacionais/${usuarioId}`,
+      {
+        method: "PUT",
+        auth: true,
+        body: {
+          ativo,
+        },
+      }
+    );
+
+    await carregarUsuariosOperacionaisAdmin();
+
+    exibirMensagemPainel(
+      ativo
+        ? "Acesso reativado com sucesso."
+        : "Acesso desativado com sucesso."
+    );
+  } catch (erro) {
+    tratarErro(erro);
+  }
+}
+
+window.alternarStatusUsuarioOperacionalAdmin =
+  alternarStatusUsuarioOperacionalAdmin;
+
 
 window.carregarUsuariosOperacionaisAdmin = carregarUsuariosOperacionaisAdmin;
 window.salvarUsuarioOperacionalAdmin = salvarUsuarioOperacionalAdmin;
