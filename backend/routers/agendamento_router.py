@@ -357,13 +357,14 @@ def atualizar_status_agendamento_admin(
     dados: AtualizarStatusAgendamento,
     db: Session = Depends(get_db),
     _tenant_autorizado: str = Depends(validar_tenant_logado),
+    contexto_usuario: dict = Depends(obter_contexto_usuario_logado),
 ):
     novo_status = dados.status.strip().lower()
 
     if novo_status not in STATUS_AGENDAMENTO_PERMITIDOS:
         raise HTTPException(
             status_code=422,
-            detail="Status de agendamento inválido.",
+            detail="Status de agendamento invalido.",
         )
 
     agendamento = (
@@ -378,8 +379,38 @@ def atualizar_status_agendamento_admin(
     if not agendamento:
         raise HTTPException(
             status_code=404,
-            detail="Agendamento não encontrado.",
+            detail="Agendamento nao encontrado.",
         )
+
+    papel_operacional = str(
+        contexto_usuario.get("papel") or ""
+    ).strip().lower()
+
+    permissoes = contexto_usuario.get("permissoes") or []
+    acesso_total = "*" in permissoes or papel_operacional == "gestor"
+
+    profissional_vinculado = str(
+        contexto_usuario.get("profissional_nome") or ""
+    ).strip()
+
+    if novo_status == "concluido" and not acesso_total:
+        if papel_operacional != "prestador":
+            raise HTTPException(
+                status_code=403,
+                detail="Apenas gestor ou prestador podem concluir atendimento.",
+            )
+
+        if not profissional_vinculado:
+            raise HTTPException(
+                status_code=403,
+                detail="Prestador sem profissional vinculado.",
+            )
+
+        if agendamento.profissional != profissional_vinculado:
+            raise HTTPException(
+                status_code=403,
+                detail="Prestador so pode concluir atendimentos proprios.",
+            )
 
     agendamento.status = novo_status
 
