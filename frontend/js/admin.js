@@ -3737,7 +3737,7 @@ async function carregarEquipe() {
 function obterLabelPapelOperacionalAdmin(papel) {
   const mapa = {
     gestor: "Gestor",
-    recepcao: "Recep??o",
+    recepcao: "Recepcao",
     prestador: "Prestador",
   };
 
@@ -3792,7 +3792,7 @@ function renderizarUsuariosOperacionaisAdmin(usuarios) {
       icone: "?",
       titulo: "Nenhum acesso cadastrado ainda",
       descricao:
-        "Crie acessos para recep??o ou prestadores entrarem com login pr?prio.",
+        "Crie acessos para recepcao ou prestadores entrarem com login pr?prio.",
       textoBotao: "Criar primeiro acesso",
       secaoDestino: "secao-profissionais",
     });
@@ -3808,7 +3808,7 @@ function renderizarUsuariosOperacionaisAdmin(usuarios) {
 
     const papel = obterLabelPapelOperacionalAdmin(usuario.papel);
     const status = usuario.ativo ? "Ativo" : "Inativo";
-    const profissional = usuario.profissional_nome || "Sem v?nculo";
+    const profissional = usuario.profissional_nome || "Sem vinculo";
 
     item.innerHTML = `
       <div>
