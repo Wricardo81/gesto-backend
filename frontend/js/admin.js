@@ -1510,6 +1510,12 @@ async function carregarContextoUsuarioAdmin() {
     atualizarRotuloAgendaPorPerfilAdmin();
     aplicarVisibilidadeFinanceiraOperacionalAdmin();
 
+    setTimeout(() => {
+      if (usuarioAdminEhPrestador()) {
+        renderizarResumoProducaoPrestadorAdmin(agendamentosAdminCache || []);
+      }
+    }, 700);
+
     return contexto;
   } catch (erro) {
     contextoUsuarioAdmin = null;
@@ -4678,7 +4684,14 @@ async function renderizarResumoProducaoPrestadorAdmin(agendamentos) {
         card = document.createElement("section");
         card.id = cardId;
         card.className = "financeiro-resumo-card";
-        secaoDashboard.appendChild(card);
+
+        const referencia = document.getElementById("dashboard-hoje-negocio");
+
+        if (referencia && referencia.parentElement) {
+            referencia.insertAdjacentElement("afterend", card);
+        } else {
+            secaoDashboard.prepend(card);
+        }
     }
 
     const servicosHtml = Object.entries(resumo.servicos)
@@ -4759,6 +4772,8 @@ async function renderizarResumoProducaoPrestadorAdmin(agendamentos) {
     `;
 }
 
+
+window.renderizarResumoProducaoPrestadorAdmin = renderizarResumoProducaoPrestadorAdmin;
 
 async function carregarAgendamentos() {
     if (!adminProntoParaRequisicao()) {
