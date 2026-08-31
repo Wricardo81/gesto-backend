@@ -180,6 +180,9 @@ class Profissional(Base):
     barbearia_slug = Column(String, index=True)
     nome = Column(String)
 
+    comissao_tipo = Column(String, default="nenhuma", nullable=False)
+    comissao_valor = Column(Float, default=0.0, nullable=False)
+
 
 class UsuarioOperacional(Base):
     __tablename__ = "usuarios_operacionais"
