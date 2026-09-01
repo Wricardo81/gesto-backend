@@ -176,6 +176,9 @@ def criar_usuario_operacional(
             detail="Prestador precisa estar vinculado a um profissional.",
         )
 
+    if papel != "prestador":
+        profissional_nome = None
+
     usuario = models.UsuarioOperacional(
         barbearia_slug=tenant_slug,
         nome=dados.nome.strip(),
@@ -247,6 +250,9 @@ def atualizar_usuario_operacional(
 
     if dados.ativo is not None:
         usuario.ativo = dados.ativo
+
+    if usuario.papel != "prestador":
+        usuario.profissional_nome = None
 
     if usuario.papel == "prestador" and not usuario.profissional_nome:
         raise HTTPException(

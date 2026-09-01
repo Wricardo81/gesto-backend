@@ -3246,6 +3246,7 @@ async function iniciarPainel() {
   registrarListenersCRM();
   registrarListenersBloqueiosAgenda();
   registrarListenersAgendaVisual();
+  registrarListenerPapelAcessoEquipeAdmin();
     inicializarNavegacaoAdmin();
     renderizarLinkPublicoAdmin();
 
@@ -3840,6 +3841,46 @@ function resumirPermissoesUsuarioOperacionalAdmin(permissoes) {
 }
 
 
+
+function atualizarCampoProfissionalPorPapelAcessoAdmin() {
+  const selectPapel = document.getElementById("acesso-equipe-papel");
+  const selectProfissional = document.getElementById("acesso-equipe-profissional");
+
+  if (!selectPapel || !selectProfissional) {
+    return;
+  }
+
+  const campo = selectProfissional.closest(".campo");
+  const papel = String(selectPapel.value || "prestador").trim().toLowerCase();
+  const ehPrestador = papel === "prestador";
+
+  if (campo) {
+    campo.hidden = !ehPrestador;
+    campo.setAttribute("aria-hidden", String(!ehPrestador));
+    campo.style.display = ehPrestador ? "" : "none";
+  }
+
+  selectProfissional.required = ehPrestador;
+
+  if (!ehPrestador) {
+    selectProfissional.value = "";
+  }
+}
+
+function registrarListenerPapelAcessoEquipeAdmin() {
+  const selectPapel = document.getElementById("acesso-equipe-papel");
+
+  if (!selectPapel || selectPapel.dataset.listenerPapelAcesso === "true") {
+    return;
+  }
+
+  selectPapel.dataset.listenerPapelAcesso = "true";
+  selectPapel.addEventListener("change", atualizarCampoProfissionalPorPapelAcessoAdmin);
+
+  atualizarCampoProfissionalPorPapelAcessoAdmin();
+}
+
+
 function obterLabelPapelOperacionalAdmin(papel) {
   const mapa = {
     gestor: "Gestor",
@@ -3990,7 +4031,9 @@ async function salvarUsuarioOperacionalAdmin() {
   const email = obterValorCampo("acesso-equipe-email", "");
   const senha = obterValorCampo("acesso-equipe-senha", "");
   const papel = obterValorCampo("acesso-equipe-papel", "prestador");
-  const profissionalNome = obterValorCampo("acesso-equipe-profissional", "");
+  const profissionalNome = papel === "prestador"
+    ? obterValorCampo("acesso-equipe-profissional", "")
+    : "";
   const ativo = obterValorCampo("acesso-equipe-ativo", "true") === "true";
 
   if (!nome || !email || !senha) {
@@ -4026,6 +4069,7 @@ async function salvarUsuarioOperacionalAdmin() {
     document.getElementById("acesso-equipe-papel").value = "prestador";
     document.getElementById("acesso-equipe-profissional").value = "";
     document.getElementById("acesso-equipe-ativo").value = "true";
+    atualizarCampoProfissionalPorPapelAcessoAdmin();
 
     await carregarUsuariosOperacionaisAdmin();
 
