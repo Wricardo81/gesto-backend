@@ -18,6 +18,7 @@ let agendaVisualRecarregarDepois = false;
 let avisosAdminCache = [];
 let chamadosAdminCache = [];
 let agendamentosAdminCache = [];
+let carregandoAcessosEquipeAdmin = false;
 let configuracoesAdminCache = {};
 let monitorNovosAgendamentosTimer = null;
 let painelAdminAtualizando = false;
@@ -3248,6 +3249,10 @@ async function iniciarPainel() {
     inicializarNavegacaoAdmin();
     renderizarLinkPublicoAdmin();
 
+  if (usuarioAdminEhGestor()) {
+    carregarUsuariosOperacionaisAdmin();
+  }
+
   carregarAvisosAdmin();
   tratarRetornoCadastroAdmin();
   tratarRetornoPagamentoAdmin();
@@ -3940,6 +3945,12 @@ async function carregarUsuariosOperacionaisAdmin() {
     return;
   }
 
+  if (carregandoAcessosEquipeAdmin) {
+    return;
+  }
+
+  carregandoAcessosEquipeAdmin = true;
+
   const area = document.getElementById("lista-usuarios-operacionais");
 
   if (!area) {
@@ -3965,6 +3976,8 @@ async function carregarUsuariosOperacionaisAdmin() {
     renderizarUsuariosOperacionaisAdmin(resposta.usuarios || []);
   } catch (erro) {
     tratarErro(erro);
+  } finally {
+    carregandoAcessosEquipeAdmin = false;
   }
 }
 
@@ -4064,6 +4077,41 @@ window.alternarStatusUsuarioOperacionalAdmin =
 
 window.carregarUsuariosOperacionaisAdmin = carregarUsuariosOperacionaisAdmin;
 window.salvarUsuarioOperacionalAdmin = salvarUsuarioOperacionalAdmin;
+
+
+function agendarCarregamentoAcessosEquipeAdmin() {
+    window.setTimeout(() => {
+        const secaoEquipe = document.getElementById("secao-profissionais");
+        const listaAcessos = document.getElementById("lista-usuarios-operacionais");
+
+        if (!secaoEquipe || !listaAcessos) {
+            return;
+        }
+
+        const secaoVisivel =
+            secaoEquipe.classList.contains("ativa")
+            || secaoEquipe.style.display !== "none";
+
+        if (!secaoVisivel) {
+            return;
+        }
+
+        carregarUsuariosOperacionaisAdmin();
+    }, 250);
+}
+
+document.addEventListener("click", (evento) => {
+    const alvo = evento.target?.closest?.(
+        '[data-secao="secao-profissionais"], [onclick*="secao-profissionais"]'
+    );
+
+    if (!alvo) {
+        return;
+    }
+
+    agendarCarregamentoAcessosEquipeAdmin();
+});
+
 
 
 
@@ -6695,9 +6743,12 @@ async function carregarDadosDaSecaoAdmin(secaoId, opcoes = {}) {
         }
 
         if (secaoId === "secao-profissionais") {
-          await carregarEquipe({
-            forcar,
-          });
+          await Promise.all([
+            carregarEquipe({
+              forcar,
+            }),
+            carregarUsuariosOperacionaisAdmin(),
+          ]);
         }
 
         if (secaoId === "secao-admin-assinatura") {
