@@ -4212,6 +4212,7 @@ async function salvarComissaoProfissionalAdmin(profissionalId) {
 }
 
 window.salvarComissaoProfissionalAdmin = salvarComissaoProfissionalAdmin;
+window.salvarProfissionaisServicoAdmin = salvarProfissionaisServicoAdmin;
 
 
 async function salvarProfissional() {
@@ -4279,76 +4280,244 @@ async function deletarProfissional(id) {
    SERVIÇOS
 ========================================================= */
 
-async function carregarServicos() {
+
+async function obterProfissionaisAptosServicoAdmin(servicoId) {
+    try {
+        const resposta = await apiRequest(
+            `/api/${tenantSlugLogado}/servicos/${servicoId}/profissionais`,
+            {
+                auth: true,
+            }
+        );
+
+        return resposta?.profissionais || [];
+    } catch (erro) {
+        console.warn("Nao foi possivel carregar profissionais aptos do servico.", erro);
+        return [];
+    }
+}
+
+function obterIdsProfissionaisSelecionadosServicoAdmin(servicoId) {
+    return Array.from(
+        document.querySelectorAll(
+            `[data-servico-profissional="${servicoId}"]:checked`
+        )
+    ).map((checkbox) => Number(checkbox.value)).filter(Boolean);
+}
+
+async function salvarProfissionaisServicoAdmin(servicoId) {
     if (!adminProntoParaRequisicao()) {
         return;
     }
 
-    const area = document.getElementById("lista-cardapio");
+    const idServico = Number(servicoId);
+    const profissionalIds = obterIdsProfissionaisSelecionadosServicoAdmin(idServico);
+
+    console.log("Salvando profissionais aptos do servico.", {
+        servicoId: idServico,
+        profissionalIds,
+    });
 
     try {
-        const servicos = await apiRequest(
-            `/api/${tenantSlugLogado}/servicos`
+        const resposta = await apiRequest(
+            `/api/${tenantSlugLogado}/servicos/${idServico}/profissionais`,
+            {
+                method: "PUT",
+                auth: true,
+                body: {
+                    profissional_ids: profissionalIds,
+                },
+            }
+        );
+
+        console.log("Profissionais aptos atualizados.", resposta);
+
+        ultimoCarregamentoServicosAdmin = 0;
+
+        await carregarServicos({
+            forcar: true,
+        });
+
+        exibirMensagemPainel("Profissionais aptos do servico atualizados com sucesso.");
+    } catch (erro) {
+        console.error("Erro ao salvar profissionais aptos do servico.", erro);
+        tratarErro(erro);
+    }
+}
+
+function renderizarProfissionaisServicoAdmin(servico, profissionais, profissionaisAptos) {
+    const aptosIds = new Set(
+        (profissionaisAptos || []).map((profissional) => Number(profissional.id))
+    );
+
+    if (!profissionais.length) {
+        return `
+            <div class="servico-profissionais-admin">
+                <small>Nenhum profissional cadastrado ainda.</small>
+            </div>
+        `;
+    }
+
+    const nomesAptos = (profissionaisAptos || [])
+        .map((profissional) => profissional.nome)
+        .filter(Boolean);
+
+    const resumoAptos = nomesAptos.length
+        ? nomesAptos.join(", ")
+        : "Todos os profissionais podem executar enquanto nenhum vinculo for definido.";
+
+    const opcoes = profissionais.map((profissional) => {
+        const checked = aptosIds.has(Number(profissional.id)) ? "checked" : "";
+
+        return `
+            <label class="opcao-vinculo-servico-admin">
+                <input
+                    type="checkbox"
+                    value="${profissional.id}"
+                    data-servico-profissional="${servico.id}"
+                    ${checked}
+                >
+                <span>${profissional.nome}</span>
+            </label>
+        `;
+    }).join("");
+
+    return `
+        <div class="servico-profissionais-admin">
+            <small><strong>Aptos:</strong> ${resumoAptos}</small>
+            <div class="grid-vinculos-servico-admin">
+                ${opcoes}
+            </div>
+            <button
+                type="button"
+                class="btn-secundario"
+                onclick="salvarProfissionaisServicoAdmin(${servico.id})"
+            >
+                Salvar profissionais aptos
+            </button>
+        </div>
+    `;
+}
+
+
+async function carregarServicos(opcoes = {}) {
+    if (!adminProntoParaRequisicao()) {
+        return;
+    }
+
+    const forcar = opcoes?.forcar === true;
+    const area = document.getElementById("lista-cardapio");
+
+    if (!area) {
+        return;
+    }
+
+    if (
+        !forcar
+        && cacheAdminAindaValido(
+            ultimoCarregamentoServicosAdmin,
+            TEMPO_CACHE_CURTO_ADMIN_MS
+        )
+    ) {
+        return;
+    }
+
+    if (carregandoServicosAdmin) {
+        return;
+    }
+
+    carregandoServicosAdmin = true;
+
+    area.innerHTML = criarEstadoVazioAdmin({
+        icone: "??",
+        titulo: "Carregando servicos",
+        descricao: "Buscando servicos e profissionais aptos.",
+    });
+
+    try {
+        const [servicosResposta, profissionaisResposta] = await Promise.all([
+            apiRequest(`/api/${tenantSlugLogado}/servicos`, {
+                auth: true,
+            }),
+            apiRequest(`/api/${tenantSlugLogado}/profissionais`, {
+                auth: true,
+            }),
+        ]);
+
+        const servicos = Array.isArray(servicosResposta)
+            ? servicosResposta
+            : servicosResposta?.servicos || [];
+
+        const profissionais = Array.isArray(profissionaisResposta)
+            ? profissionaisResposta
+            : profissionaisResposta?.profissionais || [];
+
+        if (!servicos.length) {
+            area.innerHTML = criarEstadoVazioAdmin({
+                icone: "??",
+                titulo: "Nenhum servico cadastrado ainda",
+                descricao: "Cadastre os servicos para que os clientes possam agendar.",
+                textoBotao: "Cadastrar servico",
+                secaoDestino: "secao-servicos",
+            });
+
+            ultimoCarregamentoServicosAdmin = Date.now();
+            return;
+        }
+
+        const vinculosPorServico = await Promise.all(
+            servicos.map(async (servico) => ({
+                servicoId: servico.id,
+                profissionaisAptos: await obterProfissionaisAptosServicoAdmin(servico.id),
+            }))
+        );
+
+        const mapaAptos = new Map(
+            vinculosPorServico.map((item) => [
+                Number(item.servicoId),
+                item.profissionaisAptos,
+            ])
         );
 
         area.innerHTML = "";
 
-        if (!servicos.length) {
-            area.innerHTML = criarEstadoVazioAdmin({
-              icone: "✦",
-              titulo: "Nenhum serviço cadastrado ainda",
-              descricao:
-                "Cadastre serviços com preço e duração para liberar sua agenda pública.",
-              textoBotao: "Cadastrar primeiro serviço",
-              secaoDestino: "secao-servicos",
-            });
-
-            return;
-        }
-
         for (const servico of servicos) {
-            const div = document.createElement("div");
+            const profissionaisAptos = mapaAptos.get(Number(servico.id)) || [];
 
-            div.className = "item-lista";
-
-            const valorFormatado = formatarMoeda(
-                servico.preco
-            );
-
-            div.innerHTML = `
-                <span>
-                    <strong>${servico.nome}</strong>
-                    <br>
-                    <small style="color: var(--texto-secundario);">
-                        ${servico.duracao} min
-                    </small>
-                </span>
-
+            const item = document.createElement("div");
+            item.className = "card-servico-admin";
+            item.innerHTML = `
                 <div>
-                    <span
-                        style="
-                            color: var(--cor-sucesso);
-                            margin-right: 15px;
-                            font-weight: 800;
-                        "
-                    >
-                        ${valorFormatado}
-                    </span>
-
-                    <button
-                        class="btn-del-mini"
-                        onclick="deletarServico(${servico.id})"
-                    >
-                        Remover
-                    </button>
+                    <strong>${servico.nome}</strong>
+                    <p>
+                        ${formatarMoeda(servico.preco)}
+                        ?
+                        ${servico.duracao} min
+                    </p>
                 </div>
+
+                ${renderizarProfissionaisServicoAdmin(
+                    servico,
+                    profissionais,
+                    profissionaisAptos
+                )}
+
+                <button
+                    type="button"
+                    onclick="deletarServico(${servico.id})"
+                >
+                    Remover
+                </button>
             `;
 
-            area.appendChild(div);
+            area.appendChild(item);
         }
 
+        ultimoCarregamentoServicosAdmin = Date.now();
     } catch (erro) {
         tratarErro(erro);
+    } finally {
+        carregandoServicosAdmin = false;
     }
 }
 
