@@ -16,6 +16,7 @@ from middleware.observability import ObservabilityMiddleware
 from routers import profissional_router
 from routers import agendamento_router
 from routers import servico_router
+from routers import servico_profissional_router
 from routers import configuracao_router
 from routers import auth_router
 from routers import saas_router
@@ -82,6 +83,7 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 app.include_router(profissional_router.router)
 app.include_router(agendamento_router.router)
 app.include_router(servico_router.router)
+app.include_router(servico_profissional_router.router)
 app.include_router(configuracao_router.router)
 app.include_router(auth_router.router)
 app.include_router(saas_router.router)

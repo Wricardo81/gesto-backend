@@ -184,6 +184,27 @@ class Profissional(Base):
     comissao_valor = Column(Float, default=0.0, nullable=False)
 
 
+
+
+class ServicoProfissional(Base):
+    __tablename__ = "servico_profissionais"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "barbearia_slug",
+            "servico_id",
+            "profissional_id",
+            name="uq_servico_profissional_tenant",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    barbearia_slug = Column(String, index=True, nullable=False)
+    servico_id = Column(Integer, ForeignKey("servicos.id"), index=True, nullable=False)
+    profissional_id = Column(Integer, ForeignKey("profissionais.id"), index=True, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class UsuarioOperacional(Base):
     __tablename__ = "usuarios_operacionais"
 
