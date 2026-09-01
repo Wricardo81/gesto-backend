@@ -4811,6 +4811,55 @@ async function renderizarResumoProducaoPrestadorAdmin(agendamentos) {
 
 window.renderizarResumoProducaoPrestadorAdmin = renderizarResumoProducaoPrestadorAdmin;
 
+
+function usuarioPodeConcluirAgendamentoAdmin(agendamento) {
+    const status = String(agendamento?.status || "confirmado")
+        .trim()
+        .toLowerCase();
+
+    if (["concluido", "cancelado", "faltou", "falta"].includes(status)) {
+        return false;
+    }
+
+    if (usuarioAdminEhGestor()) {
+        return true;
+    }
+
+    if (!usuarioAdminEhPrestador()) {
+        return false;
+    }
+
+    const profissionalAgendamento = normalizarNomeProfissionalAdmin(
+        agendamento?.profissional
+    );
+
+    const profissionalVinculado = normalizarNomeProfissionalAdmin(
+        obterProfissionalVinculadoUsuarioAdmin()
+    );
+
+    return (
+        profissionalAgendamento
+        && profissionalVinculado
+        && profissionalAgendamento === profissionalVinculado
+    );
+}
+
+function renderizarBotaoConcluirAgendamentoAdmin(agendamento) {
+    if (!usuarioPodeConcluirAgendamentoAdmin(agendamento)) {
+        return "";
+    }
+
+    return `
+        <button
+            type="button"
+            onclick="atualizarStatusAgendamento(${agendamento.id}, 'concluido')"
+        >
+            Concluir
+        </button>
+    `;
+}
+
+
 async function carregarAgendamentos() {
     if (!adminProntoParaRequisicao()) {
         return;
@@ -5172,9 +5221,7 @@ async function carregarAgendamentos() {
                         Confirmar
                     </button>
 
-                    <button type="button" onclick="atualizarStatusAgendamento(${agendamento.id}, 'concluido')">
-                        Concluir
-                    </button>
+                    ${renderizarBotaoConcluirAgendamentoAdmin(agendamento)}
 
                     <button type="button" onclick="cancelarAgendamentoComMotivo(${agendamento.id})">
                         Cancelar
@@ -6200,12 +6247,7 @@ function renderizarAcoesAgendaVisual(evento) {
                 Confirmar
             </button>
 
-            <button
-                type="button"
-                onclick="atualizarStatusAgendamento(${evento.id}, 'concluido')"
-            >
-                Concluir
-            </button>
+            ${renderizarBotaoConcluirAgendamentoAdmin(evento)}
 
             <button
                 type="button"
