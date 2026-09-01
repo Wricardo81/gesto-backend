@@ -28,7 +28,6 @@ def listar_profissionais_do_servico(
     tenant_slug: str,
     servico_id: int,
     db: Session = Depends(get_db),
-    _tenant_autorizado: str = Depends(validar_tenant_logado),
 ):
     return {
         "profissionais": servico_profissional_service.listar_profissionais_do_servico(

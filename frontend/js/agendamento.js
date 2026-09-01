@@ -9,6 +9,7 @@ let reserva = {
 
 let identificadorUltimaBusca = 0;
 let assinaturaTenantInativa = false;
+let profissionaisPublicosCache = [];
 
 
 /* =========================================================
@@ -619,41 +620,84 @@ async function carregarServicos() {
 }
 
 
-function selecionarServico(botaoSelecionado, servico) {
+async function selecionarServico(botaoSelecionado, servico) {
     document
         .querySelectorAll("#lista-servicos .btn-opcao")
-        .forEach(
-            botao => botao.classList.remove("selecionado")
-        );
+        .forEach((botao) => {
+            botao.classList.remove("selecionado");
+        });
 
     botaoSelecionado.classList.add("selecionado");
 
     reserva.servico = servico;
+    reserva.profissional = null;
+    reserva.data = "";
     reserva.horario = "";
 
-    buscarHorariosLivres();
+    document
+        .querySelectorAll("#lista-profissionais .btn-opcao")
+        .forEach((botao) => {
+            botao.classList.remove("selecionado");
+        });
+
+    document.getElementById("input-data").value = "";
     atualizarBotaoFinalizar();
+
+    await carregarProfissionaisDoServicoPublico(servico);
+
     mostrarEtapaPublica("etapa-profissional");
 }
+
 
 
 /* =========================================================
    PROFISSIONAIS
 ========================================================= */
 
-async function carregarProfissionais() {
-    const profissionais = await apiRequest(
-        `/api/${encodeURIComponent(tenantSlug)}/profissionais`
-    );
 
-    const container = document.getElementById(
-        "lista-profissionais"
-    );
+async function carregarProfissionaisDoServicoPublico(servico) {
+    if (!servico || !servico.id) {
+        return carregarProfissionais();
+    }
+
+    const container = document.getElementById("lista-profissionais");
+
+    if (container) {
+        container.innerText = "Carregando profissionais aptos...";
+    }
+
+    try {
+        const resposta = await apiRequest(
+            `/api/${encodeURIComponent(tenantSlug)}/servicos/${encodeURIComponent(servico.id)}/profissionais`
+        );
+
+        const profissionaisAptos = resposta?.profissionais || [];
+
+        if (profissionaisAptos.length > 0) {
+            renderizarProfissionaisPublicos(profissionaisAptos);
+            return profissionaisAptos;
+        }
+
+        renderizarProfissionaisPublicos(profissionaisPublicosCache);
+        return profissionaisPublicosCache;
+    } catch (erro) {
+        console.warn("Nao foi possivel carregar profissionais aptos do servico.", erro);
+        renderizarProfissionaisPublicos(profissionaisPublicosCache);
+        return profissionaisPublicosCache;
+    }
+}
+
+function renderizarProfissionaisPublicos(profissionais) {
+    const container = document.getElementById("lista-profissionais");
+
+    if (!container) {
+        return;
+    }
 
     container.innerHTML = "";
 
     if (!profissionais.length) {
-        container.innerText = "Nenhum profissional disponível.";
+        container.innerText = "Nenhum profissional dispon?vel.";
         return;
     }
 
@@ -675,6 +719,19 @@ async function carregarProfissionais() {
         container.appendChild(botao);
     }
 }
+
+
+async function carregarProfissionais() {
+    const profissionais = await apiRequest(
+        `/api/${encodeURIComponent(tenantSlug)}/profissionais`
+    );
+
+    profissionaisPublicosCache = profissionais || [];
+    renderizarProfissionaisPublicos(profissionaisPublicosCache);
+
+    return profissionaisPublicosCache;
+}
+
 
 
 function selecionarProfissional(
