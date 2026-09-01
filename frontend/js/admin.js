@@ -1509,6 +1509,7 @@ async function carregarContextoUsuarioAdmin() {
     aplicarPermissoesInterfaceAdmin();
     atualizarRotuloAgendaPorPerfilAdmin();
     aplicarVisibilidadeFinanceiraOperacionalAdmin();
+    aplicarDashboardLimpoPorPerfilAdmin();
 
     setTimeout(() => {
       if (usuarioAdminEhPrestador()) {
@@ -3060,7 +3061,9 @@ function renderizarOnboardingAdminComResumo(resumo) {
   });
 
   if (!itensPendentes.length) {
-    card.style.display = "block";
+    card.style.display = "none";
+    card.hidden = true;
+    card.setAttribute("aria-hidden", "true");
 
     progresso.textContent = `${totalConcluido}/${itens.length} concluídos`;
 
@@ -3249,7 +3252,14 @@ async function iniciarPainel() {
   tratarRetornoCadastroAdmin();
   tratarRetornoPagamentoAdmin();
   carregarAssinaturaAdmin();
-  carregarOnboardingAdmin();
+
+  if (usuarioAdminEhGestor()) {
+    carregarOnboardingAdmin();
+  } else {
+    ocultarElementoDashboardAdmin("card-onboarding-admin", true);
+  }
+
+  aplicarDashboardLimpoPorPerfilAdmin();
   iniciarMonitorNovosAgendamentos();
 }
 
@@ -4444,6 +4454,56 @@ function ajustarColunasFinanceirasTabelaAdmin(containerSelector, termos, visivel
     });
   });
 }
+
+
+function ocultarElementoDashboardAdmin(id, ocultar) {
+    const elemento = document.getElementById(id);
+
+    if (!elemento) {
+        return;
+    }
+
+    elemento.hidden = Boolean(ocultar);
+    elemento.setAttribute("aria-hidden", String(Boolean(ocultar)));
+    elemento.style.display = ocultar ? "none" : "";
+}
+
+function aplicarDashboardLimpoPorPerfilAdmin() {
+    const ehGestor = usuarioAdminEhGestor();
+    const ehRecepcao = usuarioAdminEhRecepcao();
+    const ehPrestador = usuarioAdminEhPrestador();
+
+    const ocultarCardsGestao = ehRecepcao || ehPrestador;
+
+    ocultarElementoDashboardAdmin("card-link-publico-admin", ocultarCardsGestao);
+    ocultarElementoDashboardAdmin("card-onboarding-admin", ocultarCardsGestao);
+    ocultarElementoDashboardAdmin("dashboard-acoes-rapidas", ocultarCardsGestao);
+    ocultarElementoDashboardAdmin("dashboard-insight-dia", ehPrestador);
+
+    const kicker = document.getElementById("dashboard-pro-kicker");
+    const titulo = document.getElementById("dashboard-pro-titulo");
+    const subtitulo = document.getElementById("dashboard-pro-subtitulo");
+
+    if (ehPrestador) {
+        if (kicker) kicker.textContent = "Painel do prestador";
+        if (titulo) titulo.textContent = "Minha agenda e producao";
+        if (subtitulo) {
+            subtitulo.textContent =
+                "Acompanhe seus atendimentos, conclusoes e comissao estimada.";
+        }
+    } else if (ehRecepcao) {
+        if (kicker) kicker.textContent = "Painel da recepcao";
+        if (titulo) titulo.textContent = "Agenda e atendimento";
+        if (subtitulo) {
+            subtitulo.textContent =
+                "Acompanhe a agenda, clientes e operacao do atendimento.";
+        }
+    } else if (ehGestor) {
+        if (kicker) kicker.textContent = "Painel do negocio";
+        if (titulo) titulo.textContent = "Resumo inteligente da sua operacao";
+    }
+}
+
 
 function aplicarVisibilidadeFinanceiraOperacionalAdmin() {
   const podeVerAlgumFinanceiro = usuarioAdminPodeVerAlgumFinanceiro();
