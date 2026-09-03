@@ -798,6 +798,58 @@ def alterar_status_assinatura(
     }
 
 
+
+@router.put("/barbearias/{barbearia_id}/financeiro")
+def atualizar_financeiro_barbearia(
+    barbearia_id: int,
+    dados: AtualizacaoFinanceiraBarbearia,
+    db: Session = Depends(get_db),
+    _usuario_admin: str = Depends(obter_saas_admin_logado),
+):
+    barbearia = (
+        db.query(models.Barbearia)
+        .filter(models.Barbearia.id == barbearia_id)
+        .first()
+    )
+
+    if not barbearia:
+        raise HTTPException(
+            status_code=404,
+            detail="Empresa n?o encontrada.",
+        )
+
+    if dados.plano_nome is not None:
+        barbearia.plano_nome = dados.plano_nome
+
+    if dados.valor_mensal is not None:
+        barbearia.valor_mensal = dados.valor_mensal
+
+    if dados.vencimento_plano:
+        try:
+            barbearia.vencimento_plano = date.fromisoformat(dados.vencimento_plano)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Data de vencimento inv?lida.",
+            )
+    elif dados.vencimento_plano is None:
+        barbearia.vencimento_plano = None
+
+    if dados.status_pagamento is not None:
+        barbearia.status_pagamento = dados.status_pagamento
+
+    if dados.dias_tolerancia is not None:
+        barbearia.dias_tolerancia = dados.dias_tolerancia
+
+    db.commit()
+    db.refresh(barbearia)
+
+    return {
+        "mensagem": "Dados financeiros atualizados com sucesso.",
+        "barbearia": serializar_barbearia_saas(barbearia),
+    }
+
+
 @router.put("/barbearias/{barbearia_id}/dados")
 def atualizar_dados_barbearia(
     barbearia_id: int,
