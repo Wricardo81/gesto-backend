@@ -4509,9 +4509,7 @@ async function carregarServicos(opcoes = {}) {
                 <div>
                     <strong>${servico.nome}</strong>
                     <p>
-                        ${formatarMoeda(servico.preco)}
-                        ?
-                        ${servico.duracao} min
+                        ${formatarMoeda(servico.preco)} - ${servico.duracao} min
                     </p>
                 </div>
 
