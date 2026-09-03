@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from uuid import uuid4
 
 import models
+from services import servico_profissional_service
 from repositories import agendamento_repository
 
 
@@ -126,6 +127,19 @@ def criar_novo_agendamento(
         raise HTTPException(
             status_code=404,
             detail="Profissional não encontrado neste estabelecimento.",
+        )
+
+    profissional_apto = servico_profissional_service.profissional_pode_executar_servico(
+        db=db,
+        tenant_slug=tenant_slug,
+        servico_id=servico.id,
+        profissional_id=profissional.id,
+    )
+
+    if not profissional_apto:
+        raise HTTPException(
+            status_code=400,
+            detail="Este profissional nao executa o servico selecionado.",
         )
 
     resultado = obter_horarios_disponiveis(
