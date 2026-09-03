@@ -4362,9 +4362,19 @@ function renderizarProfissionaisServicoAdmin(servico, profissionais, profissiona
         .map((profissional) => profissional.nome)
         .filter(Boolean);
 
-    const resumoAptos = nomesAptos.length
+    const servicoRestrito = nomesAptos.length > 0;
+
+    const resumoAptos = servicoRestrito
         ? nomesAptos.join(", ")
-        : "Todos os profissionais podem executar enquanto nenhum vinculo for definido.";
+        : "Todos os profissionais cadastrados podem executar este servico.";
+
+    const selo = servicoRestrito
+        ? '<span class="selo-vinculo-servico-admin restrito">Restrito</span>'
+        : '<span class="selo-vinculo-servico-admin livre">Todos executam</span>';
+
+    const ajuda = servicoRestrito
+        ? "Somente os profissionais marcados aparecem na agenda publica para este servico."
+        : "Nenhum profissional especifico foi marcado. Por isso, todos aparecem na agenda publica para este servico.";
 
     const opcoes = profissionais.map((profissional) => {
         const checked = aptosIds.has(Number(profissional.id)) ? "checked" : "";
@@ -4384,10 +4394,19 @@ function renderizarProfissionaisServicoAdmin(servico, profissionais, profissiona
 
     return `
         <div class="servico-profissionais-admin">
-            <small><strong>Aptos:</strong> ${resumoAptos}</small>
+            <div class="cabecalho-vinculo-servico-admin">
+                ${selo}
+                <small><strong>Aptos:</strong> ${resumoAptos}</small>
+            </div>
+
+            <small class="ajuda-vinculo-servico-admin">
+                ${ajuda}
+            </small>
+
             <div class="grid-vinculos-servico-admin">
                 ${opcoes}
             </div>
+
             <button
                 type="button"
                 class="btn-secundario"
